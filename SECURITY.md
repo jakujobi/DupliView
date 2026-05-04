@@ -23,12 +23,23 @@ Pull requests will be rejected if they add or require:
 - Registry changes.
 - Scheduled tasks.
 - Services.
+- Compiled executables or installers.
 
 Documentation may mention these behaviors only as warnings or safety commitments.
 
+## Documentation Safety
+
+Tutorials and screenshots should keep the same safety line as the app:
+
+- Do not teach deletion, cleanup, quarantine, recycle-bin, move, or rename workflows.
+- Do not suggest uploading files or reports to any service.
+- Do not include private file contents.
+- Redact personal names, client names, and sensitive paths in screenshots.
+- Use local sample folders for examples.
+
 ## Reporting Security Issues
 
-Please report security concerns privately to the project owner or maintainer. Include:
+Please report security concerns through GitHub issues or the repository's chosen contact method. Include:
 
 - A clear description of the issue.
 - Steps to reproduce, if available.
@@ -40,3 +51,5 @@ Do not include private file contents in reports.
 ## Maintainer Review
 
 Maintainers should review every security-related change for preservation of the report-only boundary. Any change that expands DupliView beyond local CSV reporting requires rejection unless it is rewritten to preserve the safety guarantees above.
+
+Pull requests adding deletion, cleanup, telemetry, or network behavior will be rejected.
