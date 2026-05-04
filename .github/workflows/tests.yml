@@ -1,0 +1,28 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  pester:
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Pester
+        shell: powershell
+        run: |
+          Install-Module Pester -RequiredVersion 4.10.1 -Scope CurrentUser -Force -SkipPublisherCheck
+          Import-Module Pester -RequiredVersion 4.10.1
+
+      - name: Run tests
+        shell: powershell
+        run: |
+          Import-Module Pester -RequiredVersion 4.10.1
+          Invoke-Pester -Script .\tests\DupliView.Tests.ps1

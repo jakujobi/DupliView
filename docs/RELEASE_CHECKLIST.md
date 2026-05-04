@@ -11,6 +11,8 @@ Use this checklist before publishing a DupliView ZIP.
 
 ## Test Check
 
+Use Windows PowerShell 5.1 with Pester 4.10.1.
+
 Run from the repository root:
 
 ```powershell
@@ -65,6 +67,7 @@ Include:
 - `DupliView.ps1`
 - `Run DupliView.cmd`
 - `Run DupliView.bat`
+- `START HERE.txt`
 - `README.md`
 - `LICENSE`
 - `CHANGELOG.md`
@@ -74,6 +77,8 @@ Include:
 - `tests/`
 - `docs/`
 - `Reports/.gitkeep`
+
+For a coworker ZIP, keep `START HERE.txt`, the launchers, `DupliView.ps1`, `src/`, `Reports/`, and the main safety docs easy to see at the top level.
 
 Do not include:
 

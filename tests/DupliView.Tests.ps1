@@ -378,6 +378,7 @@ Describe 'DupliView documentation set' {
     It 'includes the planned user guides and support docs' {
         $requiredDocs = @(
             'CONTRIBUTING.md',
+            'START HERE.txt',
             'docs\README.md',
             'docs\RELEASE_CHECKLIST.md',
             'docs\SCREENSHOTS.md',
@@ -430,6 +431,29 @@ Describe 'DupliView documentation set' {
         $screenshots | Should Not Match 'Screenshots To Capture'
         $screenshots | Should Not Match 'Current Status'
         Test-Path -LiteralPath (Join-Path $ProjectRoot 'docs\images\README.md') | Should Be $false
+    }
+
+    It 'includes a coworker start-here guide for release ZIPs' {
+        $startHere = [System.IO.File]::ReadAllText((Join-Path $ProjectRoot 'START HERE.txt'))
+
+        $startHere | Should Match 'Double-click "Run DupliView\.cmd"'
+        $startHere | Should Match 'report-only'
+        $startHere | Should Match 'never deletes, moves, renames, overwrites, uploads, or modifies scanned files'
+    }
+}
+
+Describe 'DupliView GitHub Actions CI' {
+    It 'runs the Pester suite on Windows' {
+        $workflowPath = Join-Path $ProjectRoot '.github\workflows\tests.yml'
+        Test-Path -LiteralPath $workflowPath | Should Be $true
+
+        $workflow = [System.IO.File]::ReadAllText($workflowPath)
+        $workflow | Should Match 'windows-latest'
+        $workflow | Should Match 'actions/checkout@v4'
+        $workflow | Should Match 'shell: powershell'
+        $workflow | Should Match 'Install-Module Pester -RequiredVersion 4\.10\.1'
+        $workflow | Should Match 'Import-Module Pester -RequiredVersion 4\.10\.1'
+        $workflow | Should Match 'Invoke-Pester -Script \.\\tests\\DupliView\.Tests\.ps1'
     }
 }
 

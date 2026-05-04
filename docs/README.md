@@ -1,6 +1,6 @@
 # DupliView documentation
 
-This folder has the practical docs for using and sharing DupliView.
+This folder has the practical docs for using and sharing DupliView. Release ZIPs also include `START HERE.txt` in the top-level folder.
 
 DupliView is report-only. It reads selected folders and writes CSV reports. It does not change scanned files.
 
