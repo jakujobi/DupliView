@@ -31,7 +31,7 @@ For GUI changes, keep the labels used in the guides in sync with the labels in `
 
 ## Development Setup
 
-Normal users do not need Pester. Contributors use Pester for tests.
+Normal users do not need Pester. Contributors use Pester for tests. Use Windows PowerShell 5.1 with Pester 4.10.1 so local runs match GitHub Actions.
 
 Run tests from the repository root:
 
@@ -42,7 +42,7 @@ Invoke-Pester -Script .\tests\DupliView.Tests.ps1
 If Pester is missing:
 
 ```powershell
-Install-Module Pester -Scope CurrentUser
+Install-Module Pester -RequiredVersion 4.10.1 -Scope CurrentUser
 ```
 
 Do not add production dependencies for normal users.

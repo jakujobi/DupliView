@@ -16,11 +16,13 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install Pester
-        shell: pwsh
+        shell: powershell
         run: |
-          Install-Module Pester -Scope CurrentUser -Force -SkipPublisherCheck
+          Install-Module Pester -RequiredVersion 4.10.1 -Scope CurrentUser -Force -SkipPublisherCheck
+          Import-Module Pester -RequiredVersion 4.10.1
 
       - name: Run tests
-        shell: pwsh
+        shell: powershell
         run: |
+          Import-Module Pester -RequiredVersion 4.10.1
           Invoke-Pester -Script .\tests\DupliView.Tests.ps1

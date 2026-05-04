@@ -11,6 +11,8 @@ Use this checklist before publishing a DupliView ZIP.
 
 ## Test Check
 
+Use Windows PowerShell 5.1 with Pester 4.10.1.
+
 Run from the repository root:
 
 ```powershell

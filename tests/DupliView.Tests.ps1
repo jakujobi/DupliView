@@ -450,7 +450,9 @@ Describe 'DupliView GitHub Actions CI' {
         $workflow = [System.IO.File]::ReadAllText($workflowPath)
         $workflow | Should Match 'windows-latest'
         $workflow | Should Match 'actions/checkout@v4'
-        $workflow | Should Match 'Install-Module Pester'
+        $workflow | Should Match 'shell: powershell'
+        $workflow | Should Match 'Install-Module Pester -RequiredVersion 4\.10\.1'
+        $workflow | Should Match 'Import-Module Pester -RequiredVersion 4\.10\.1'
         $workflow | Should Match 'Invoke-Pester -Script \.\\tests\\DupliView\.Tests\.ps1'
     }
 }

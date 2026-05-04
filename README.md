@@ -164,6 +164,8 @@ User guides:
 
 Production use does not require Pester. Tests use Pester for development.
 
+The current test suite is written for Windows PowerShell 5.1 and Pester 4.10.1. GitHub Actions pins that version so CI matches the local Windows target.
+
 Run tests from the repository root:
 
 ```powershell
@@ -173,7 +175,7 @@ Invoke-Pester -Script .\tests\DupliView.Tests.ps1
 If Pester is not installed, install it for development only:
 
 ```powershell
-Install-Module Pester -Scope CurrentUser
+Install-Module Pester -RequiredVersion 4.10.1 -Scope CurrentUser
 ```
 
 The test suite creates temporary folders and files under the system temp directory and removes only those temporary test folders.
