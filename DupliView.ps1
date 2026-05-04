@@ -473,12 +473,12 @@ $optionsGroup.Margin = New-DupliViewPadding 8 3 0 3
 
 $optionsLayout = New-Object System.Windows.Forms.TableLayoutPanel
 $optionsLayout.Dock = 'Fill'
-$optionsLayout.ColumnCount = 4
-$optionsLayout.RowCount = 1
-Add-DupliViewColumnStyle -Layout $optionsLayout -SizeType ([System.Windows.Forms.SizeType]::Absolute) -Width 124
-Add-DupliViewColumnStyle -Layout $optionsLayout -SizeType ([System.Windows.Forms.SizeType]::Absolute) -Width 82
-Add-DupliViewColumnStyle -Layout $optionsLayout -SizeType ([System.Windows.Forms.SizeType]::Percent) -Width 50
-Add-DupliViewColumnStyle -Layout $optionsLayout -SizeType ([System.Windows.Forms.SizeType]::Percent) -Width 50
+$optionsLayout.ColumnCount = 2
+$optionsLayout.RowCount = 2
+Add-DupliViewColumnStyle -Layout $optionsLayout -SizeType ([System.Windows.Forms.SizeType]::Absolute) -Width 150
+Add-DupliViewColumnStyle -Layout $optionsLayout -SizeType ([System.Windows.Forms.SizeType]::Percent) -Width 100
+Add-DupliViewRowStyle -Layout $optionsLayout -SizeType ([System.Windows.Forms.SizeType]::Absolute) -Height 34
+Add-DupliViewRowStyle -Layout $optionsLayout -SizeType ([System.Windows.Forms.SizeType]::Percent) -Height 100
 [void] $optionsGroup.Controls.Add($optionsLayout)
 
 $minimumSizeLabel = New-Object System.Windows.Forms.Label
@@ -493,23 +493,26 @@ $minimumSizeControl.Minimum = 0
 $minimumSizeControl.Maximum = 1048576
 $minimumSizeControl.Increment = 1
 $minimumSizeControl.Value = [decimal] $MinimumSizeMB
-$minimumSizeControl.Dock = 'Fill'
-$minimumSizeControl.Margin = New-DupliViewPadding 0 8 10 0
+$minimumSizeControl.Width = 76
+$minimumSizeControl.Anchor = 'Left'
+$minimumSizeControl.Margin = New-DupliViewPadding 0 6 10 0
 [void] $optionsLayout.Controls.Add($minimumSizeControl, 1, 0)
 
 $skipEmptyFilesCheckBox = New-Object System.Windows.Forms.CheckBox
 $skipEmptyFilesCheckBox.Text = 'Skip empty files'
 $skipEmptyFilesCheckBox.Checked = $SkipEmptyFiles
 $skipEmptyFilesCheckBox.Dock = 'Fill'
-$skipEmptyFilesCheckBox.Margin = New-DupliViewPadding 0 7 8 0
-[void] $optionsLayout.Controls.Add($skipEmptyFilesCheckBox, 2, 0)
+$skipEmptyFilesCheckBox.AutoSize = $true
+$skipEmptyFilesCheckBox.Margin = New-DupliViewPadding 0 8 8 0
+[void] $optionsLayout.Controls.Add($skipEmptyFilesCheckBox, 0, 1)
 
 $createErrorCsvCheckBox = New-Object System.Windows.Forms.CheckBox
 $createErrorCsvCheckBox.Text = 'Create error CSV'
 $createErrorCsvCheckBox.Checked = $CreateErrorLog
 $createErrorCsvCheckBox.Dock = 'Fill'
-$createErrorCsvCheckBox.Margin = New-DupliViewPadding 0 7 0 0
-[void] $optionsLayout.Controls.Add($createErrorCsvCheckBox, 3, 0)
+$createErrorCsvCheckBox.AutoSize = $true
+$createErrorCsvCheckBox.Margin = New-DupliViewPadding 0 8 0 0
+[void] $optionsLayout.Controls.Add($createErrorCsvCheckBox, 1, 1)
 
 $statusGroup = New-DupliViewGroupBox -Text 'Scan status'
 [void] $mainLayout.Controls.Add($statusGroup, 0, 3)

@@ -2,13 +2,13 @@
 
 A safe, no-install Windows duplicate-file report tool.
 
-DupliView helps non-technical Windows users find exact duplicate files in selected folders, drives, or shared locations. It scans files by size first, hashes matching-size candidates with SHA-256, groups exact content matches, and exports the results to CSV.
+DupliView helps people find exact duplicate files in selected folders, drives, or shared locations. It scans by file size first, hashes only possible matches with SHA-256, then writes duplicate groups to a CSV report.
 
 DupliView is report-only. It never deletes, moves, renames, overwrites, uploads, or modifies scanned files.
 
 ## Screenshot
 
-Screenshot placeholder.
+The refreshed window keeps scan locations, report destination, scan options, scan status, and the live log on one screen.
 
 ## Safety Guarantee
 
@@ -25,14 +25,18 @@ DupliView never:
 - Requires administrator rights.
 - Installs services, scheduled tasks, registry entries, or executables.
 
+The app also avoids "open folder" shortcuts that launch other programs. When a scan finishes, use `Copy Report Path` if you need the report location.
+
 ## Features
 
 - No install required.
 - Runs through a `.cmd` or `.bat` launcher.
-- Simple Windows Forms interface.
+- Clean Windows Forms interface with one main screen.
 - Supports folders, drives, mapped drives such as `L:\`, and UNC paths such as `\\server\share`.
-- Guided single-screen scan flow with live status and log output.
-- Visible options for minimum file size, empty-file handling, and optional error CSV output.
+- Live status for current phase, readable files, skipped files, duplicate groups, and final report path.
+- Live log that shows each scan step.
+- Scan options for minimum file size, empty-file handling, and optional error CSV output.
+- Background scanning so the window stays responsive during longer scans.
 - Finds exact duplicates by size plus SHA-256 hash.
 - Exports duplicate groups to CSV for Excel review.
 - Optional error CSV for unreadable or failed-hash files.
@@ -73,6 +77,26 @@ powershell.exe -NoProfile -STA -ExecutionPolicy Bypass -File "%~dp0DupliView.ps1
 8. Use `Copy Report Path` if you need to paste the report location elsewhere.
 9. Open the saved CSV report in Excel.
 
+## Scan Options
+
+- `Minimum size (MB)`: skips files smaller than the selected size.
+- `Skip empty files`: skips zero-byte files when checked.
+- `Create error CSV`: writes a separate CSV for unreadable files or failed hash attempts when errors occur.
+
+The defaults are meant for normal use. You can scan without changing them.
+
+## Status And Log
+
+The status area gives a quick summary:
+
+- `Phase`: what DupliView is doing now.
+- `Readable files`: files that passed the selected filters.
+- `Skipped`: unreadable files plus files skipped by the empty-file and minimum-size options.
+- `Duplicate groups`: groups of matching files found in this scan.
+- `Final report path`: where the CSV was saved.
+
+The live log gives the step-by-step record. It is useful for long network-drive scans where the file count can be large.
+
 ## How To Read The CSV
 
 Each row is one file that belongs to a duplicate group. Rows with the same `DuplicateGroup` value have identical file content according to the configured hash algorithm.
@@ -97,7 +121,7 @@ Review duplicate groups manually. DupliView does not decide which file to keep a
 
 ## Configuration
 
-Version 1 keeps configuration inside `DupliView.ps1` near the top:
+Version 1 keeps defaults inside `DupliView.ps1` near the top:
 
 ```powershell
 $MinimumSizeMB = 0
@@ -111,6 +135,8 @@ $CsvColumns = @(...)
 
 Normal users do not need to edit these settings.
 
+The GUI exposes the common options directly. The script configuration remains useful for maintainers who want to change defaults before sharing the tool with a team.
+
 ## Known Limitations
 
 - Large network drives may take a long time.
@@ -119,6 +145,19 @@ Normal users do not need to edit these settings.
 - Files that change while a scan is running may produce stale results.
 - This finds exact duplicates, not similar photos or fuzzy matches.
 - There are no deletion or cleanup features.
+
+## Tutorials And Guides
+
+The full documentation starts at [DupliView Documentation](docs/README.md).
+
+User guides:
+
+- [First Scan](docs/guides/first-scan.md)
+- [Network Drive Scan](docs/guides/network-drive-scan.md)
+- [Read The CSV](docs/guides/read-the-csv.md)
+- [Skipped Files And Errors](docs/guides/skipped-files-and-errors.md)
+- [Share With Coworkers](docs/guides/share-with-coworkers.md)
+- [Troubleshooting](docs/guides/troubleshooting.md)
 
 ## Development And Testing
 
@@ -137,6 +176,8 @@ Install-Module Pester -Scope CurrentUser
 ```
 
 The test suite creates temporary folders and files under the system temp directory and removes only those temporary test folders.
+
+Before changing the GUI or docs, run the tests and check that the safety scan still passes.
 
 ## License
 
