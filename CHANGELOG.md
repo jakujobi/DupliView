@@ -10,5 +10,7 @@
 - Added report-only safety policy.
 - Added launchers.
 - Added tests.
+- Added GitHub Actions test workflow.
 - Updated documentation for the refreshed GUI.
-- Added a plan for tutorials and user guides.
+- Added tutorials, troubleshooting, release, and contributor guides.
+- Added coworker start-here guide.

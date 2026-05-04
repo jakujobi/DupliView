@@ -54,8 +54,9 @@ The app also avoids "open folder" shortcuts that launch other programs. When a s
 
 1. Download or clone the repository.
 2. Open the DupliView folder.
-3. Double-click `Run DupliView.cmd`.
-4. If needed, use `Run DupliView.bat` instead.
+3. For release ZIPs, read `START HERE.txt`.
+4. Double-click `Run DupliView.cmd`.
+5. If needed, use `Run DupliView.bat` instead.
 
 The launchers run:
 
@@ -178,6 +179,8 @@ Install-Module Pester -Scope CurrentUser
 The test suite creates temporary folders and files under the system temp directory and removes only those temporary test folders.
 
 Before changing the GUI or docs, run the tests and check that the safety scan still passes.
+
+GitHub Actions also runs the Pester suite on Windows for pushes and pull requests.
 
 ## License
 
