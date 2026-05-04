@@ -47,6 +47,154 @@ $CoreScript = Join-Path $ScriptRoot 'src\DupliView.Core.ps1'
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 
+function New-DupliViewSize {
+    param([int] $Width, [int] $Height)
+    return New-Object System.Drawing.Size -ArgumentList $Width, $Height
+}
+
+function New-DupliViewPoint {
+    param([int] $X, [int] $Y)
+    return New-Object System.Drawing.Point -ArgumentList $X, $Y
+}
+
+function New-DupliViewPadding {
+    param(
+        [int] $Left,
+        [int] $Top,
+        [int] $Right,
+        [int] $Bottom
+    )
+
+    return New-Object System.Windows.Forms.Padding -ArgumentList $Left, $Top, $Right, $Bottom
+}
+
+function New-DupliViewFont {
+    param(
+        [float] $Size,
+        [System.Drawing.FontStyle] $Style = [System.Drawing.FontStyle]::Regular
+    )
+
+    return New-Object System.Drawing.Font -ArgumentList @('Segoe UI', $Size, $Style)
+}
+
+function Add-DupliViewRowStyle {
+    param(
+        [Parameter(Mandatory = $true)]
+        [System.Windows.Forms.TableLayoutPanel] $Layout,
+
+        [Parameter(Mandatory = $true)]
+        [System.Windows.Forms.SizeType] $SizeType,
+
+        [float] $Height = 0
+    )
+
+    $style = New-Object System.Windows.Forms.RowStyle
+    $style.SizeType = $SizeType
+    $style.Height = $Height
+    [void] $Layout.RowStyles.Add($style)
+}
+
+function Add-DupliViewColumnStyle {
+    param(
+        [Parameter(Mandatory = $true)]
+        [System.Windows.Forms.TableLayoutPanel] $Layout,
+
+        [Parameter(Mandatory = $true)]
+        [System.Windows.Forms.SizeType] $SizeType,
+
+        [float] $Width = 0
+    )
+
+    $style = New-Object System.Windows.Forms.ColumnStyle
+    $style.SizeType = $SizeType
+    $style.Width = $Width
+    [void] $Layout.ColumnStyles.Add($style)
+}
+
+function New-DupliViewGroupBox {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Text
+    )
+
+    $groupBox = New-Object System.Windows.Forms.GroupBox
+    $groupBox.Text = $Text
+    $groupBox.Dock = 'Fill'
+    $groupBox.Padding = New-DupliViewPadding 12 16 12 12
+    $groupBox.Font = New-DupliViewFont 9 ([System.Drawing.FontStyle]::Regular)
+    return $groupBox
+}
+
+function New-DupliViewButton {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Text,
+
+        [int] $Width = 112,
+
+        [switch] $Primary
+    )
+
+    $button = New-Object System.Windows.Forms.Button
+    $button.Text = $Text
+    $button.Width = $Width
+    $button.Height = 32
+    $button.Margin = New-DupliViewPadding 0 0 8 0
+    $button.Font = New-DupliViewFont 9
+
+    if ($Primary) {
+        $button.UseVisualStyleBackColor = $false
+        $button.BackColor = [System.Drawing.Color]::FromArgb(15, 108, 189)
+        $button.ForeColor = [System.Drawing.Color]::White
+        $button.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+        $button.FlatAppearance.BorderSize = 0
+    }
+
+    return $button
+}
+
+function New-DupliViewStatusLabel {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Text,
+
+        [switch] $Value
+    )
+
+    $label = New-Object System.Windows.Forms.Label
+    $label.Text = $Text
+    $label.Dock = 'Fill'
+    $label.AutoEllipsis = $true
+    $label.TextAlign = 'MiddleLeft'
+    $label.Margin = New-DupliViewPadding 0 2 8 2
+
+    if ($Value) {
+        $label.Font = New-DupliViewFont 10 ([System.Drawing.FontStyle]::Bold)
+    }
+    else {
+        $label.ForeColor = [System.Drawing.Color]::FromArgb(88, 88, 88)
+    }
+
+    return $label
+}
+
+function New-DupliViewProgressMessage {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Kind,
+
+        [string] $Message,
+
+        [string] $Phase
+    )
+
+    return [pscustomobject] @{
+        Kind = $Kind
+        Message = $Message
+        Phase = $Phase
+    }
+}
+
 function Add-DupliViewLogMessage {
     param(
         [Parameter(Mandatory = $true)]
@@ -60,7 +208,6 @@ function Add-DupliViewLogMessage {
     $LogTextBox.AppendText($line + [Environment]::NewLine)
     $LogTextBox.SelectionStart = $LogTextBox.TextLength
     $LogTextBox.ScrollToCaret()
-    [System.Windows.Forms.Application]::DoEvents()
 }
 
 function Add-DupliViewScanLocation {
@@ -94,33 +241,42 @@ function Show-DupliViewManualPathDialog {
     $dialog.FormBorderStyle = 'FixedDialog'
     $dialog.MaximizeBox = $false
     $dialog.MinimizeBox = $false
-    $dialog.ClientSize = New-Object System.Drawing.Size(520, 145)
+    $dialog.ClientSize = New-DupliViewSize 540 150
+    $dialog.Font = New-DupliViewFont 9
+
+    $layout = New-Object System.Windows.Forms.TableLayoutPanel
+    $layout.Dock = 'Fill'
+    $layout.Padding = New-DupliViewPadding 14 12 14 12
+    $layout.RowCount = 3
+    $layout.ColumnCount = 1
+    Add-DupliViewRowStyle -Layout $layout -SizeType ([System.Windows.Forms.SizeType]::Absolute) -Height 26
+    Add-DupliViewRowStyle -Layout $layout -SizeType ([System.Windows.Forms.SizeType]::Absolute) -Height 34
+    Add-DupliViewRowStyle -Layout $layout -SizeType ([System.Windows.Forms.SizeType]::Percent) -Height 100
+    [void] $dialog.Controls.Add($layout)
 
     $label = New-Object System.Windows.Forms.Label
     $label.Text = 'Enter a folder, drive, or network path:'
-    $label.Location = New-Object System.Drawing.Point(12, 15)
-    $label.Size = New-Object System.Drawing.Size(490, 20)
-    [void] $dialog.Controls.Add($label)
+    $label.Dock = 'Fill'
+    $label.TextAlign = 'MiddleLeft'
+    [void] $layout.Controls.Add($label, 0, 0)
 
     $pathTextBox = New-Object System.Windows.Forms.TextBox
-    $pathTextBox.Location = New-Object System.Drawing.Point(12, 42)
-    $pathTextBox.Size = New-Object System.Drawing.Size(490, 24)
-    $pathTextBox.Anchor = 'Top,Left,Right'
-    [void] $dialog.Controls.Add($pathTextBox)
+    $pathTextBox.Dock = 'Fill'
+    [void] $layout.Controls.Add($pathTextBox, 0, 1)
 
-    $okButton = New-Object System.Windows.Forms.Button
-    $okButton.Text = 'OK'
-    $okButton.Location = New-Object System.Drawing.Point(326, 94)
-    $okButton.Size = New-Object System.Drawing.Size(80, 28)
-    $okButton.DialogResult = [System.Windows.Forms.DialogResult]::OK
-    [void] $dialog.Controls.Add($okButton)
+    $buttonPanel = New-Object System.Windows.Forms.FlowLayoutPanel
+    $buttonPanel.Dock = 'Fill'
+    $buttonPanel.FlowDirection = 'RightToLeft'
+    $buttonPanel.Padding = New-DupliViewPadding 0 12 0 0
+    [void] $layout.Controls.Add($buttonPanel, 0, 2)
 
-    $cancelButton = New-Object System.Windows.Forms.Button
-    $cancelButton.Text = 'Cancel'
-    $cancelButton.Location = New-Object System.Drawing.Point(422, 94)
-    $cancelButton.Size = New-Object System.Drawing.Size(80, 28)
+    $cancelButton = New-DupliViewButton -Text 'Cancel' -Width 86
     $cancelButton.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
-    [void] $dialog.Controls.Add($cancelButton)
+    [void] $buttonPanel.Controls.Add($cancelButton)
+
+    $okButton = New-DupliViewButton -Text 'OK' -Width 86 -Primary
+    $okButton.DialogResult = [System.Windows.Forms.DialogResult]::OK
+    [void] $buttonPanel.Controls.Add($okButton)
 
     $dialog.AcceptButton = $okButton
     $dialog.CancelButton = $cancelButton
@@ -136,6 +292,55 @@ function Show-DupliViewManualPathDialog {
     return $null
 }
 
+function Set-DupliViewScanControlsEnabled {
+    param(
+        [bool] $Enabled
+    )
+
+    $addFolderButton.Enabled = $Enabled
+    $addManualPathButton.Enabled = $Enabled
+    $removeSelectedButton.Enabled = $Enabled
+    $clearAllButton.Enabled = $Enabled
+    $chooseExportButton.Enabled = $Enabled
+    $minimumSizeControl.Enabled = $Enabled
+    $skipEmptyFilesCheckBox.Enabled = $Enabled
+    $createErrorCsvCheckBox.Enabled = $Enabled
+    $startScanButton.Enabled = $Enabled
+    $copyReportPathButton.Enabled = $Enabled -and -not [string]::IsNullOrWhiteSpace($reportPathTextBox.Text)
+    $closeButton.Enabled = $Enabled
+}
+
+function Set-DupliViewPhase {
+    param([string] $Phase)
+
+    $phaseValueLabel.Text = $Phase
+}
+
+function Reset-DupliViewStatus {
+    $phaseValueLabel.Text = 'Ready'
+    $readableValueLabel.Text = '0'
+    $skippedValueLabel.Text = '0'
+    $duplicatesValueLabel.Text = '0'
+    $reportPathTextBox.Text = ''
+    $copyReportPathButton.Enabled = $false
+}
+
+function Complete-DupliViewStatus {
+    param(
+        [Parameter(Mandatory = $true)]
+        $WorkerResult
+    )
+
+    $scanResult = $WorkerResult.ScanResult
+    $skippedCount = $scanResult.SkippedUnreadableItemCount + $scanResult.SkippedEmptyFileCount + $scanResult.SkippedMinimumSizeFileCount
+    $phaseValueLabel.Text = 'Done'
+    $readableValueLabel.Text = ('{0:N0}' -f $scanResult.CandidateFileCount)
+    $skippedValueLabel.Text = ('{0:N0}' -f $skippedCount)
+    $duplicatesValueLabel.Text = ('{0:N0}' -f $scanResult.DuplicateGroupCount)
+    $reportPathTextBox.Text = $WorkerResult.ReportPath
+    $copyReportPathButton.Enabled = -not [string]::IsNullOrWhiteSpace($WorkerResult.ReportPath)
+}
+
 $defaultReportFolder = Join-Path $ScriptRoot $DefaultReportFolderName
 if (-not (Test-Path -LiteralPath $defaultReportFolder -PathType Container)) {
     [void] (New-Item -ItemType Directory -Path $defaultReportFolder -Force)
@@ -144,104 +349,352 @@ if (-not (Test-Path -LiteralPath $defaultReportFolder -PathType Container)) {
 $form = New-Object System.Windows.Forms.Form
 $form.Text = 'DupliView'
 $form.StartPosition = 'CenterScreen'
-$form.Size = New-Object System.Drawing.Size(800, 620)
-$form.MinimumSize = New-Object System.Drawing.Size(720, 560)
+$form.ClientSize = New-DupliViewSize 960 720
+$form.MinimumSize = New-DupliViewSize 860 660
+$form.Font = New-DupliViewFont 9
+$form.BackColor = [System.Drawing.Color]::FromArgb(245, 247, 250)
 $script:DupliViewScanRunning = $false
+
+$mainLayout = New-Object System.Windows.Forms.TableLayoutPanel
+$mainLayout.Dock = 'Fill'
+$mainLayout.Padding = New-DupliViewPadding 18 16 18 16
+$mainLayout.RowCount = 6
+$mainLayout.ColumnCount = 1
+Add-DupliViewRowStyle -Layout $mainLayout -SizeType ([System.Windows.Forms.SizeType]::Absolute) -Height 86
+Add-DupliViewRowStyle -Layout $mainLayout -SizeType ([System.Windows.Forms.SizeType]::Absolute) -Height 188
+Add-DupliViewRowStyle -Layout $mainLayout -SizeType ([System.Windows.Forms.SizeType]::Absolute) -Height 104
+Add-DupliViewRowStyle -Layout $mainLayout -SizeType ([System.Windows.Forms.SizeType]::Absolute) -Height 118
+Add-DupliViewRowStyle -Layout $mainLayout -SizeType ([System.Windows.Forms.SizeType]::Percent) -Height 100
+Add-DupliViewRowStyle -Layout $mainLayout -SizeType ([System.Windows.Forms.SizeType]::Absolute) -Height 48
+[void] $form.Controls.Add($mainLayout)
+
+$headerPanel = New-Object System.Windows.Forms.Panel
+$headerPanel.Dock = 'Fill'
+$headerPanel.Padding = New-DupliViewPadding 2 0 2 8
+[void] $mainLayout.Controls.Add($headerPanel, 0, 0)
 
 $titleLabel = New-Object System.Windows.Forms.Label
 $titleLabel.Text = 'DupliView'
-$titleLabel.Font = New-Object System.Drawing.Font('Segoe UI', 18, [System.Drawing.FontStyle]::Bold)
-$titleLabel.Location = New-Object System.Drawing.Point(18, 14)
-$titleLabel.Size = New-Object System.Drawing.Size(740, 36)
+$titleLabel.Font = New-DupliViewFont 22 ([System.Drawing.FontStyle]::Bold)
+$titleLabel.Location = New-DupliViewPoint 0 0
+$titleLabel.Size = New-DupliViewSize 500 38
 $titleLabel.Anchor = 'Top,Left,Right'
-[void] $form.Controls.Add($titleLabel)
+[void] $headerPanel.Controls.Add($titleLabel)
+
+$taglineLabel = New-Object System.Windows.Forms.Label
+$taglineLabel.Text = 'A safe, no-install Windows duplicate-file report tool.'
+$taglineLabel.Font = New-DupliViewFont 9
+$taglineLabel.ForeColor = [System.Drawing.Color]::FromArgb(74, 74, 74)
+$taglineLabel.Location = New-DupliViewPoint 2 38
+$taglineLabel.Size = New-DupliViewSize 620 20
+[void] $headerPanel.Controls.Add($taglineLabel)
 
 $safetyLabel = New-Object System.Windows.Forms.Label
-$safetyLabel.Text = 'This tool is report-only. It never deletes, moves, renames, or modifies scanned files.'
-$safetyLabel.Location = New-Object System.Drawing.Point(22, 54)
-$safetyLabel.Size = New-Object System.Drawing.Size(740, 22)
-$safetyLabel.Anchor = 'Top,Left,Right'
-[void] $form.Controls.Add($safetyLabel)
+$safetyLabel.Text = 'Report-only: DupliView never deletes, moves, renames, or modifies scanned files.'
+$safetyLabel.BackColor = [System.Drawing.Color]::FromArgb(232, 244, 253)
+$safetyLabel.ForeColor = [System.Drawing.Color]::FromArgb(32, 82, 119)
+$safetyLabel.BorderStyle = [System.Windows.Forms.BorderStyle]::FixedSingle
+$safetyLabel.Location = New-DupliViewPoint 0 62
+$safetyLabel.Size = New-DupliViewSize 900 22
+$safetyLabel.Anchor = 'Left,Right,Bottom'
+$safetyLabel.TextAlign = 'MiddleLeft'
+$safetyLabel.Padding = New-DupliViewPadding 8 0 8 0
+[void] $headerPanel.Controls.Add($safetyLabel)
 
-$locationsLabel = New-Object System.Windows.Forms.Label
-$locationsLabel.Text = 'Selected scan locations'
-$locationsLabel.Location = New-Object System.Drawing.Point(22, 92)
-$locationsLabel.Size = New-Object System.Drawing.Size(220, 20)
-[void] $form.Controls.Add($locationsLabel)
+$locationsGroup = New-DupliViewGroupBox -Text 'Scan locations'
+[void] $mainLayout.Controls.Add($locationsGroup, 0, 1)
+
+$locationsLayout = New-Object System.Windows.Forms.TableLayoutPanel
+$locationsLayout.Dock = 'Fill'
+$locationsLayout.RowCount = 2
+$locationsLayout.ColumnCount = 1
+Add-DupliViewRowStyle -Layout $locationsLayout -SizeType ([System.Windows.Forms.SizeType]::Percent) -Height 100
+Add-DupliViewRowStyle -Layout $locationsLayout -SizeType ([System.Windows.Forms.SizeType]::Absolute) -Height 38
+[void] $locationsGroup.Controls.Add($locationsLayout)
 
 $locationsList = New-Object System.Windows.Forms.ListBox
-$locationsList.Location = New-Object System.Drawing.Point(22, 116)
-$locationsList.Size = New-Object System.Drawing.Size(740, 120)
-$locationsList.Anchor = 'Top,Left,Right'
+$locationsList.Dock = 'Fill'
 $locationsList.HorizontalScrollbar = $true
 $locationsList.SelectionMode = 'MultiExtended'
-[void] $form.Controls.Add($locationsList)
+$locationsList.IntegralHeight = $false
+$locationsList.BackColor = [System.Drawing.Color]::White
+[void] $locationsLayout.Controls.Add($locationsList, 0, 0)
 
-$addFolderButton = New-Object System.Windows.Forms.Button
-$addFolderButton.Text = 'Add Folder'
-$addFolderButton.Location = New-Object System.Drawing.Point(22, 248)
-$addFolderButton.Size = New-Object System.Drawing.Size(105, 30)
-[void] $form.Controls.Add($addFolderButton)
+$locationsButtonPanel = New-Object System.Windows.Forms.FlowLayoutPanel
+$locationsButtonPanel.Dock = 'Fill'
+$locationsButtonPanel.FlowDirection = 'LeftToRight'
+$locationsButtonPanel.WrapContents = $false
+$locationsButtonPanel.Padding = New-DupliViewPadding 0 8 0 0
+[void] $locationsLayout.Controls.Add($locationsButtonPanel, 0, 1)
 
-$addManualPathButton = New-Object System.Windows.Forms.Button
-$addManualPathButton.Text = 'Add Manual Path'
-$addManualPathButton.Location = New-Object System.Drawing.Point(137, 248)
-$addManualPathButton.Size = New-Object System.Drawing.Size(130, 30)
-[void] $form.Controls.Add($addManualPathButton)
+$addFolderButton = New-DupliViewButton -Text 'Add Folder' -Width 112
+$addManualPathButton = New-DupliViewButton -Text 'Add Manual Path' -Width 132
+$removeSelectedButton = New-DupliViewButton -Text 'Remove Selected' -Width 132
+$clearAllButton = New-DupliViewButton -Text 'Clear All' -Width 92
+[void] $locationsButtonPanel.Controls.Add($addFolderButton)
+[void] $locationsButtonPanel.Controls.Add($addManualPathButton)
+[void] $locationsButtonPanel.Controls.Add($removeSelectedButton)
+[void] $locationsButtonPanel.Controls.Add($clearAllButton)
 
-$removeSelectedButton = New-Object System.Windows.Forms.Button
-$removeSelectedButton.Text = 'Remove Selected'
-$removeSelectedButton.Location = New-Object System.Drawing.Point(277, 248)
-$removeSelectedButton.Size = New-Object System.Drawing.Size(130, 30)
-[void] $form.Controls.Add($removeSelectedButton)
+$middleLayout = New-Object System.Windows.Forms.TableLayoutPanel
+$middleLayout.Dock = 'Fill'
+$middleLayout.ColumnCount = 2
+$middleLayout.RowCount = 1
+Add-DupliViewColumnStyle -Layout $middleLayout -SizeType ([System.Windows.Forms.SizeType]::Percent) -Width 62
+Add-DupliViewColumnStyle -Layout $middleLayout -SizeType ([System.Windows.Forms.SizeType]::Percent) -Width 38
+[void] $mainLayout.Controls.Add($middleLayout, 0, 2)
 
-$clearAllButton = New-Object System.Windows.Forms.Button
-$clearAllButton.Text = 'Clear All'
-$clearAllButton.Location = New-Object System.Drawing.Point(417, 248)
-$clearAllButton.Size = New-Object System.Drawing.Size(95, 30)
-[void] $form.Controls.Add($clearAllButton)
+$destinationGroup = New-DupliViewGroupBox -Text 'Report destination'
+$destinationGroup.Margin = New-DupliViewPadding 0 3 8 3
+[void] $middleLayout.Controls.Add($destinationGroup, 0, 0)
 
-$exportLabel = New-Object System.Windows.Forms.Label
-$exportLabel.Text = 'Export folder'
-$exportLabel.Location = New-Object System.Drawing.Point(22, 300)
-$exportLabel.Size = New-Object System.Drawing.Size(120, 20)
-[void] $form.Controls.Add($exportLabel)
+$destinationLayout = New-Object System.Windows.Forms.TableLayoutPanel
+$destinationLayout.Dock = 'Fill'
+$destinationLayout.ColumnCount = 2
+$destinationLayout.RowCount = 1
+Add-DupliViewColumnStyle -Layout $destinationLayout -SizeType ([System.Windows.Forms.SizeType]::Percent) -Width 100
+Add-DupliViewColumnStyle -Layout $destinationLayout -SizeType ([System.Windows.Forms.SizeType]::Absolute) -Width 150
+[void] $destinationGroup.Controls.Add($destinationLayout)
 
 $exportFolderTextBox = New-Object System.Windows.Forms.TextBox
-$exportFolderTextBox.Location = New-Object System.Drawing.Point(22, 324)
-$exportFolderTextBox.Size = New-Object System.Drawing.Size(595, 24)
-$exportFolderTextBox.Anchor = 'Top,Left,Right'
+$exportFolderTextBox.Dock = 'Fill'
 $exportFolderTextBox.ReadOnly = $true
 $exportFolderTextBox.Text = $defaultReportFolder
-[void] $form.Controls.Add($exportFolderTextBox)
+$exportFolderTextBox.Margin = New-DupliViewPadding 0 8 8 0
+[void] $destinationLayout.Controls.Add($exportFolderTextBox, 0, 0)
 
-$chooseExportButton = New-Object System.Windows.Forms.Button
-$chooseExportButton.Text = 'Choose Export Folder'
-$chooseExportButton.Location = New-Object System.Drawing.Point(630, 322)
-$chooseExportButton.Size = New-Object System.Drawing.Size(132, 28)
-$chooseExportButton.Anchor = 'Top,Right'
-[void] $form.Controls.Add($chooseExportButton)
+$chooseExportButton = New-DupliViewButton -Text 'Choose Folder' -Width 132
+$chooseExportButton.Margin = New-DupliViewPadding 0 6 0 0
+[void] $destinationLayout.Controls.Add($chooseExportButton, 1, 0)
 
-$startScanButton = New-Object System.Windows.Forms.Button
-$startScanButton.Text = 'Start Scan'
-$startScanButton.Location = New-Object System.Drawing.Point(22, 368)
-$startScanButton.Size = New-Object System.Drawing.Size(105, 32)
-[void] $form.Controls.Add($startScanButton)
+$optionsGroup = New-DupliViewGroupBox -Text 'Scan options'
+$optionsGroup.Margin = New-DupliViewPadding 8 3 0 3
+[void] $middleLayout.Controls.Add($optionsGroup, 1, 0)
 
-$closeButton = New-Object System.Windows.Forms.Button
-$closeButton.Text = 'Close'
-$closeButton.Location = New-Object System.Drawing.Point(137, 368)
-$closeButton.Size = New-Object System.Drawing.Size(90, 32)
-[void] $form.Controls.Add($closeButton)
+$optionsLayout = New-Object System.Windows.Forms.TableLayoutPanel
+$optionsLayout.Dock = 'Fill'
+$optionsLayout.ColumnCount = 4
+$optionsLayout.RowCount = 1
+Add-DupliViewColumnStyle -Layout $optionsLayout -SizeType ([System.Windows.Forms.SizeType]::Absolute) -Width 124
+Add-DupliViewColumnStyle -Layout $optionsLayout -SizeType ([System.Windows.Forms.SizeType]::Absolute) -Width 82
+Add-DupliViewColumnStyle -Layout $optionsLayout -SizeType ([System.Windows.Forms.SizeType]::Percent) -Width 50
+Add-DupliViewColumnStyle -Layout $optionsLayout -SizeType ([System.Windows.Forms.SizeType]::Percent) -Width 50
+[void] $optionsGroup.Controls.Add($optionsLayout)
+
+$minimumSizeLabel = New-Object System.Windows.Forms.Label
+$minimumSizeLabel.Text = 'Minimum size (MB)'
+$minimumSizeLabel.Dock = 'Fill'
+$minimumSizeLabel.TextAlign = 'MiddleLeft'
+[void] $optionsLayout.Controls.Add($minimumSizeLabel, 0, 0)
+
+$minimumSizeControl = New-Object System.Windows.Forms.NumericUpDown
+$minimumSizeControl.DecimalPlaces = 2
+$minimumSizeControl.Minimum = 0
+$minimumSizeControl.Maximum = 1048576
+$minimumSizeControl.Increment = 1
+$minimumSizeControl.Value = [decimal] $MinimumSizeMB
+$minimumSizeControl.Dock = 'Fill'
+$minimumSizeControl.Margin = New-DupliViewPadding 0 8 10 0
+[void] $optionsLayout.Controls.Add($minimumSizeControl, 1, 0)
+
+$skipEmptyFilesCheckBox = New-Object System.Windows.Forms.CheckBox
+$skipEmptyFilesCheckBox.Text = 'Skip empty files'
+$skipEmptyFilesCheckBox.Checked = $SkipEmptyFiles
+$skipEmptyFilesCheckBox.Dock = 'Fill'
+$skipEmptyFilesCheckBox.Margin = New-DupliViewPadding 0 7 8 0
+[void] $optionsLayout.Controls.Add($skipEmptyFilesCheckBox, 2, 0)
+
+$createErrorCsvCheckBox = New-Object System.Windows.Forms.CheckBox
+$createErrorCsvCheckBox.Text = 'Create error CSV'
+$createErrorCsvCheckBox.Checked = $CreateErrorLog
+$createErrorCsvCheckBox.Dock = 'Fill'
+$createErrorCsvCheckBox.Margin = New-DupliViewPadding 0 7 0 0
+[void] $optionsLayout.Controls.Add($createErrorCsvCheckBox, 3, 0)
+
+$statusGroup = New-DupliViewGroupBox -Text 'Scan status'
+[void] $mainLayout.Controls.Add($statusGroup, 0, 3)
+
+$statusLayout = New-Object System.Windows.Forms.TableLayoutPanel
+$statusLayout.Dock = 'Fill'
+$statusLayout.RowCount = 3
+$statusLayout.ColumnCount = 8
+Add-DupliViewRowStyle -Layout $statusLayout -SizeType ([System.Windows.Forms.SizeType]::Absolute) -Height 28
+Add-DupliViewRowStyle -Layout $statusLayout -SizeType ([System.Windows.Forms.SizeType]::Absolute) -Height 32
+Add-DupliViewRowStyle -Layout $statusLayout -SizeType ([System.Windows.Forms.SizeType]::Percent) -Height 100
+for ($columnIndex = 0; $columnIndex -lt 8; $columnIndex++) {
+    Add-DupliViewColumnStyle -Layout $statusLayout -SizeType ([System.Windows.Forms.SizeType]::Percent) -Width 12.5
+}
+[void] $statusGroup.Controls.Add($statusLayout)
+
+[void] $statusLayout.Controls.Add((New-DupliViewStatusLabel -Text 'Phase'), 0, 0)
+$phaseValueLabel = New-DupliViewStatusLabel -Text 'Ready' -Value
+[void] $statusLayout.Controls.Add($phaseValueLabel, 1, 0)
+
+[void] $statusLayout.Controls.Add((New-DupliViewStatusLabel -Text 'Readable files'), 2, 0)
+$readableValueLabel = New-DupliViewStatusLabel -Text '0' -Value
+[void] $statusLayout.Controls.Add($readableValueLabel, 3, 0)
+
+[void] $statusLayout.Controls.Add((New-DupliViewStatusLabel -Text 'Skipped'), 4, 0)
+$skippedValueLabel = New-DupliViewStatusLabel -Text '0' -Value
+[void] $statusLayout.Controls.Add($skippedValueLabel, 5, 0)
+
+[void] $statusLayout.Controls.Add((New-DupliViewStatusLabel -Text 'Duplicate groups'), 6, 0)
+$duplicatesValueLabel = New-DupliViewStatusLabel -Text '0' -Value
+[void] $statusLayout.Controls.Add($duplicatesValueLabel, 7, 0)
+
+$reportPathLabel = New-DupliViewStatusLabel -Text 'Final report path'
+[void] $statusLayout.Controls.Add($reportPathLabel, 0, 1)
+$statusLayout.SetColumnSpan($reportPathLabel, 2)
+
+$reportPathTextBox = New-Object System.Windows.Forms.TextBox
+$reportPathTextBox.Dock = 'Fill'
+$reportPathTextBox.ReadOnly = $true
+$reportPathTextBox.Margin = New-DupliViewPadding 0 4 8 0
+[void] $statusLayout.Controls.Add($reportPathTextBox, 2, 1)
+$statusLayout.SetColumnSpan($reportPathTextBox, 4)
+
+$copyReportPathButton = New-DupliViewButton -Text 'Copy Report Path' -Width 140
+$copyReportPathButton.Enabled = $false
+$copyReportPathButton.Margin = New-DupliViewPadding 0 2 0 0
+[void] $statusLayout.Controls.Add($copyReportPathButton, 6, 1)
+$statusLayout.SetColumnSpan($copyReportPathButton, 2)
+
+$logGroup = New-DupliViewGroupBox -Text 'Live log'
+$logGroup.Margin = New-DupliViewPadding 0 4 0 6
+[void] $mainLayout.Controls.Add($logGroup, 0, 4)
 
 $logTextBox = New-Object System.Windows.Forms.TextBox
-$logTextBox.Location = New-Object System.Drawing.Point(22, 420)
-$logTextBox.Size = New-Object System.Drawing.Size(740, 120)
-$logTextBox.Anchor = 'Top,Bottom,Left,Right'
+$logTextBox.Dock = 'Fill'
 $logTextBox.Multiline = $true
 $logTextBox.ScrollBars = 'Vertical'
 $logTextBox.ReadOnly = $true
-[void] $form.Controls.Add($logTextBox)
+$logTextBox.BackColor = [System.Drawing.Color]::White
+$logTextBox.Font = New-Object System.Drawing.Font -ArgumentList @('Consolas', 9, [System.Drawing.FontStyle]::Regular)
+[void] $logGroup.Controls.Add($logTextBox)
+
+$actionPanel = New-Object System.Windows.Forms.FlowLayoutPanel
+$actionPanel.Dock = 'Fill'
+$actionPanel.FlowDirection = 'RightToLeft'
+$actionPanel.WrapContents = $false
+$actionPanel.Padding = New-DupliViewPadding 0 7 0 0
+[void] $mainLayout.Controls.Add($actionPanel, 0, 5)
+
+$closeButton = New-DupliViewButton -Text 'Close' -Width 92
+$startScanButton = New-DupliViewButton -Text 'Start Scan' -Width 132 -Primary
+[void] $actionPanel.Controls.Add($closeButton)
+[void] $actionPanel.Controls.Add($startScanButton)
+
+$scanWorker = New-Object System.ComponentModel.BackgroundWorker
+$scanWorker.WorkerReportsProgress = $true
+
+$scanWorker.Add_DoWork({
+    param($Sender, $EventArgs)
+
+    $arguments = $EventArgs.Argument
+    $worker = $Sender
+
+    try {
+        $worker.ReportProgress(0, (New-DupliViewProgressMessage -Kind 'Phase' -Phase 'Preparing'))
+        $worker.ReportProgress(0, (New-DupliViewProgressMessage -Kind 'Log' -Message 'Step 1: Preparing scan...'))
+
+        $minimumSizeBytes = Convert-DupliViewMinimumSizeToBytes -MinimumSizeMB $arguments.MinimumSizeMB
+
+        $scanResult = Get-DupliViewDuplicateRecords `
+            -ScanLocations $arguments.ScanLocations `
+            -MinimumSizeBytes $minimumSizeBytes `
+            -SkipEmptyFiles $arguments.SkipEmptyFiles `
+            -HashAlgorithm $arguments.HashAlgorithm `
+            -ProgressCallback {
+                param($Message)
+                $phase = $null
+
+                if ($Message -like 'Step 2:*') { $phase = 'Collecting files' }
+                elseif ($Message -like 'Step 3:*') { $phase = 'Grouping by size' }
+                elseif ($Message -like 'Step 4:*') { $phase = 'Hashing' }
+                elseif ($Message -like 'Step 5:*') { $phase = 'Grouping by hash' }
+
+                if ($phase) {
+                    $worker.ReportProgress(0, (New-DupliViewProgressMessage -Kind 'Phase' -Phase $phase))
+                }
+
+                $worker.ReportProgress(0, (New-DupliViewProgressMessage -Kind 'Log' -Message $Message))
+            }
+
+        $worker.ReportProgress(0, (New-DupliViewProgressMessage -Kind 'Phase' -Phase 'Writing report'))
+        $worker.ReportProgress(0, (New-DupliViewProgressMessage -Kind 'Log' -Message 'Step 6: Writing CSV report...'))
+
+        $timestamp = Get-Date
+        $reportFileName = New-DupliViewReportFileName -ScanLocations $arguments.ScanLocations -Timestamp $timestamp
+        $reportPath = Export-DupliViewDuplicateReport -Records $scanResult.DuplicateRecords -ExportFolder $arguments.ExportFolder -FileName $reportFileName -CsvColumns $arguments.CsvColumns
+
+        $errorReportPath = $null
+        if ($arguments.CreateErrorLog -and $scanResult.ErrorRecords.Count -gt 0) {
+            $errorFileName = New-DupliViewReportFileName -ScanLocations $arguments.ScanLocations -Timestamp $timestamp -ErrorReport
+            $errorReportPath = Export-DupliViewErrorReport -ErrorRecords $scanResult.ErrorRecords -ExportFolder $arguments.ExportFolder -FileName $errorFileName
+        }
+
+        $EventArgs.Result = [pscustomobject] @{
+            Success = $true
+            ScanResult = $scanResult
+            ReportPath = $reportPath
+            ErrorReportPath = $errorReportPath
+        }
+    }
+    catch {
+        $EventArgs.Result = [pscustomobject] @{
+            Success = $false
+            Error = $_.Exception.Message
+        }
+    }
+})
+
+$scanWorker.Add_ProgressChanged({
+    param($Sender, $EventArgs)
+
+    $message = $EventArgs.UserState
+    if (-not $message) {
+        return
+    }
+
+    if ($message.Kind -eq 'Phase') {
+        Set-DupliViewPhase -Phase $message.Phase
+    }
+    elseif ($message.Kind -eq 'Log') {
+        Add-DupliViewLogMessage -LogTextBox $logTextBox -Message $message.Message
+    }
+})
+
+$scanWorker.Add_RunWorkerCompleted({
+    param($Sender, $EventArgs)
+
+    $script:DupliViewScanRunning = $false
+    Set-DupliViewScanControlsEnabled -Enabled $true
+
+    if ($EventArgs.Error) {
+        $phaseValueLabel.Text = 'Stopped'
+        Add-DupliViewLogMessage -LogTextBox $logTextBox -Message ('Scan stopped: {0}' -f $EventArgs.Error.Message)
+        [void] [System.Windows.Forms.MessageBox]::Show($form, ('DupliView could not finish the scan:{0}{1}' -f [Environment]::NewLine, $EventArgs.Error.Message), 'DupliView', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning)
+        return
+    }
+
+    $result = $EventArgs.Result
+    if (-not $result.Success) {
+        $phaseValueLabel.Text = 'Stopped'
+        Add-DupliViewLogMessage -LogTextBox $logTextBox -Message ('Scan stopped: {0}' -f $result.Error)
+        [void] [System.Windows.Forms.MessageBox]::Show($form, ('DupliView could not finish the scan:{0}{1}' -f [Environment]::NewLine, $result.Error), 'DupliView', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning)
+        return
+    }
+
+    Complete-DupliViewStatus -WorkerResult $result
+
+    if ($result.ErrorReportPath) {
+        Add-DupliViewLogMessage -LogTextBox $logTextBox -Message ('Error report saved to: {0}' -f $result.ErrorReportPath)
+    }
+
+    Add-DupliViewLogMessage -LogTextBox $logTextBox -Message 'Done.'
+    Add-DupliViewLogMessage -LogTextBox $logTextBox -Message ('Report saved to: {0}' -f $result.ReportPath)
+    [void] [System.Windows.Forms.MessageBox]::Show($form, ('Report saved to:{0}{1}' -f [Environment]::NewLine, $result.ReportPath), 'DupliView', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
+})
 
 $addFolderButton.Add_Click({
     $folderDialog = New-Object System.Windows.Forms.FolderBrowserDialog
@@ -293,7 +746,18 @@ $chooseExportButton.Add_Click({
     $folderDialog.Dispose()
 })
 
+$copyReportPathButton.Add_Click({
+    if (-not [string]::IsNullOrWhiteSpace($reportPathTextBox.Text)) {
+        [System.Windows.Forms.Clipboard]::SetText($reportPathTextBox.Text)
+        Add-DupliViewLogMessage -LogTextBox $logTextBox -Message 'Report path copied.'
+    }
+})
+
 $startScanButton.Add_Click({
+    if ($scanWorker.IsBusy) {
+        return
+    }
+
     if ($locationsList.Items.Count -eq 0) {
         [void] [System.Windows.Forms.MessageBox]::Show($form, 'Add at least one folder, drive, or network path before starting a scan.', 'DupliView', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
         return
@@ -310,70 +774,32 @@ $startScanButton.Add_Click({
     }
 
     $exportFolder = $exportFolderTextBox.Text
+    if (-not (Test-Path -LiteralPath $exportFolder -PathType Container)) {
+        if ([string]::Equals($exportFolder, $defaultReportFolder, [System.StringComparison]::OrdinalIgnoreCase)) {
+            [void] (New-Item -ItemType Directory -Path $exportFolder -Force)
+        }
+        else {
+            [void] [System.Windows.Forms.MessageBox]::Show($form, 'Export folder no longer exists. Choose an existing export folder and try again.', 'DupliView', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
+            return
+        }
+    }
 
-    $startScanButton.Enabled = $false
-    $addFolderButton.Enabled = $false
-    $addManualPathButton.Enabled = $false
-    $removeSelectedButton.Enabled = $false
-    $clearAllButton.Enabled = $false
-    $chooseExportButton.Enabled = $false
-    $closeButton.Enabled = $false
-    $script:DupliViewScanRunning = $true
+    Reset-DupliViewStatus
     $logTextBox.Clear()
+    $script:DupliViewScanRunning = $true
+    Set-DupliViewScanControlsEnabled -Enabled $false
 
-    try {
-        Add-DupliViewLogMessage -LogTextBox $logTextBox -Message 'Step 1: Preparing scan...'
-
-        if (-not (Test-Path -LiteralPath $exportFolder -PathType Container)) {
-            if ([string]::Equals($exportFolder, $defaultReportFolder, [System.StringComparison]::OrdinalIgnoreCase)) {
-                [void] (New-Item -ItemType Directory -Path $exportFolder -Force)
-            }
-            else {
-                throw 'Export folder no longer exists. Choose an existing export folder and try again.'
-            }
-        }
-
-        $minimumSizeBytes = Convert-DupliViewMinimumSizeToBytes -MinimumSizeMB $MinimumSizeMB
-        $scanResult = Get-DupliViewDuplicateRecords `
-            -ScanLocations $scanLocations `
-            -MinimumSizeBytes $minimumSizeBytes `
-            -SkipEmptyFiles $SkipEmptyFiles `
-            -HashAlgorithm $HashAlgorithm `
-            -ProgressCallback {
-                param($Message)
-                Add-DupliViewLogMessage -LogTextBox $logTextBox -Message $Message
-            }
-
-        Add-DupliViewLogMessage -LogTextBox $logTextBox -Message 'Step 6: Writing CSV report...'
-        $timestamp = Get-Date
-        $reportFileName = New-DupliViewReportFileName -ScanLocations $scanLocations -Timestamp $timestamp
-        $reportPath = Export-DupliViewDuplicateReport -Records $scanResult.DuplicateRecords -ExportFolder $exportFolder -FileName $reportFileName -CsvColumns $CsvColumns
-
-        if ($CreateErrorLog -and $scanResult.ErrorRecords.Count -gt 0) {
-            $errorFileName = New-DupliViewReportFileName -ScanLocations $scanLocations -Timestamp $timestamp -ErrorReport
-            $errorReportPath = Export-DupliViewErrorReport -ErrorRecords $scanResult.ErrorRecords -ExportFolder $exportFolder -FileName $errorFileName
-            Add-DupliViewLogMessage -LogTextBox $logTextBox -Message ('Error report saved to: {0}' -f $errorReportPath)
-        }
-
-        Add-DupliViewLogMessage -LogTextBox $logTextBox -Message 'Done.'
-        Add-DupliViewLogMessage -LogTextBox $logTextBox -Message ('Report saved to: {0}' -f $reportPath)
-
-        [void] [System.Windows.Forms.MessageBox]::Show($form, ('Report saved to:{0}{1}' -f [Environment]::NewLine, $reportPath), 'DupliView', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
+    $workerArguments = [pscustomobject] @{
+        ScanLocations = $scanLocations
+        ExportFolder = $exportFolder
+        MinimumSizeMB = [double] $minimumSizeControl.Value
+        SkipEmptyFiles = [bool] $skipEmptyFilesCheckBox.Checked
+        CreateErrorLog = [bool] $createErrorCsvCheckBox.Checked
+        HashAlgorithm = $HashAlgorithm
+        CsvColumns = $CsvColumns
     }
-    catch {
-        Add-DupliViewLogMessage -LogTextBox $logTextBox -Message ('Scan stopped: {0}' -f $_.Exception.Message)
-        [void] [System.Windows.Forms.MessageBox]::Show($form, ('DupliView could not finish the scan:{0}{1}' -f [Environment]::NewLine, $_.Exception.Message), 'DupliView', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning)
-    }
-    finally {
-        $script:DupliViewScanRunning = $false
-        $startScanButton.Enabled = $true
-        $addFolderButton.Enabled = $true
-        $addManualPathButton.Enabled = $true
-        $removeSelectedButton.Enabled = $true
-        $clearAllButton.Enabled = $true
-        $chooseExportButton.Enabled = $true
-        $closeButton.Enabled = $true
-    }
+
+    $scanWorker.RunWorkerAsync($workerArguments)
 })
 
 $closeButton.Add_Click({
@@ -389,4 +815,5 @@ $form.Add_FormClosing({
     }
 })
 
+Reset-DupliViewStatus
 [void] $form.ShowDialog()

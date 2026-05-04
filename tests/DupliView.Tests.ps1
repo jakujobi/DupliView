@@ -317,6 +317,63 @@ Describe 'DupliView CSV export' {
     }
 }
 
+Describe 'DupliView GUI refresh' {
+    BeforeAll {
+        $script:GuiScriptPath = Join-Path $ProjectRoot 'DupliView.ps1'
+        $script:GuiScriptContent = [System.IO.File]::ReadAllText($script:GuiScriptPath)
+    }
+
+    It 'uses native layout containers for a resizable guided single-screen interface' {
+        $script:GuiScriptContent | Should Match 'TableLayoutPanel'
+        $script:GuiScriptContent | Should Match 'FlowLayoutPanel'
+        $script:GuiScriptContent | Should Match 'GroupBox'
+    }
+
+    It 'exposes the planned user-facing sections and scan options' {
+        $requiredText = @(
+            'Scan locations',
+            'Report destination',
+            'Scan options',
+            'Scan status',
+            'Live log',
+            'Minimum size \(MB\)',
+            'Skip empty files',
+            'Create error CSV',
+            'Copy Report Path'
+        )
+
+        foreach ($text in $requiredText) {
+            $script:GuiScriptContent | Should Match $text
+        }
+    }
+
+    It 'uses a background worker and UI-safe progress messages for scanning' {
+        $script:GuiScriptContent | Should Match 'System\.ComponentModel\.BackgroundWorker'
+        $script:GuiScriptContent | Should Match 'WorkerReportsProgress'
+        $script:GuiScriptContent | Should Match 'ReportProgress'
+        $script:GuiScriptContent | Should Match 'Add_ProgressChanged'
+        $script:GuiScriptContent | Should Match 'Add_RunWorkerCompleted'
+    }
+
+    It 'tracks summary status fields and the final report path' {
+        $requiredVariables = @(
+            'phaseValueLabel',
+            'readableValueLabel',
+            'skippedValueLabel',
+            'duplicatesValueLabel',
+            'reportPathTextBox'
+        )
+
+        foreach ($variableName in $requiredVariables) {
+            $script:GuiScriptContent | Should Match ([regex]::Escape('$' + $variableName))
+        }
+    }
+
+    It 'counts unreadable, empty-file, and minimum-size skips in the skipped status summary' {
+        $script:GuiScriptContent | Should Match 'SkippedUnreadableItemCount\s*\+\s*\$scanResult\.SkippedEmptyFileCount\s*\+\s*\$scanResult\.SkippedMinimumSizeFileCount'
+    }
+}
+
 Describe 'DupliView production script safety scan' {
     It 'does not invoke dangerous commands from production scripts' {
         $productionScripts = @(

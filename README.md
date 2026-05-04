@@ -31,6 +31,8 @@ DupliView never:
 - Runs through a `.cmd` or `.bat` launcher.
 - Simple Windows Forms interface.
 - Supports folders, drives, mapped drives such as `L:\`, and UNC paths such as `\\server\share`.
+- Guided single-screen scan flow with live status and log output.
+- Visible options for minimum file size, empty-file handling, and optional error CSV output.
 - Finds exact duplicates by size plus SHA-256 hash.
 - Exports duplicate groups to CSV for Excel review.
 - Optional error CSV for unreadable or failed-hash files.
@@ -65,9 +67,11 @@ powershell.exe -NoProfile -STA -ExecutionPolicy Bypass -File "%~dp0DupliView.ps1
 2. Choose one or more folders or drives.
 3. Use `Add Manual Path` for mapped drives or UNC paths.
 4. Choose an existing export folder if you do not want to use the default `Reports` folder.
-5. Click `Start Scan`.
-6. Wait for the step-based log to finish.
-7. Open the saved CSV report in Excel.
+5. Adjust scan options if needed.
+6. Click `Start Scan`.
+7. Watch the scan status and live log.
+8. Use `Copy Report Path` if you need to paste the report location elsewhere.
+9. Open the saved CSV report in Excel.
 
 ## How To Read The CSV
 
