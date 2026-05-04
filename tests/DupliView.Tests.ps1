@@ -317,6 +317,122 @@ Describe 'DupliView CSV export' {
     }
 }
 
+Describe 'DupliView GUI refresh' {
+    BeforeAll {
+        $script:GuiScriptPath = Join-Path $ProjectRoot 'DupliView.ps1'
+        $script:GuiScriptContent = [System.IO.File]::ReadAllText($script:GuiScriptPath)
+    }
+
+    It 'uses native layout containers for a resizable guided single-screen interface' {
+        $script:GuiScriptContent | Should Match 'TableLayoutPanel'
+        $script:GuiScriptContent | Should Match 'FlowLayoutPanel'
+        $script:GuiScriptContent | Should Match 'GroupBox'
+    }
+
+    It 'exposes the planned user-facing sections and scan options' {
+        $requiredText = @(
+            'Scan locations',
+            'Report destination',
+            'Scan options',
+            'Scan status',
+            'Live log',
+            'Minimum size \(MB\)',
+            'Skip empty files',
+            'Create error CSV',
+            'Copy Report Path'
+        )
+
+        foreach ($text in $requiredText) {
+            $script:GuiScriptContent | Should Match $text
+        }
+    }
+
+    It 'uses a background worker and UI-safe progress messages for scanning' {
+        $script:GuiScriptContent | Should Match 'System\.ComponentModel\.BackgroundWorker'
+        $script:GuiScriptContent | Should Match 'WorkerReportsProgress'
+        $script:GuiScriptContent | Should Match 'ReportProgress'
+        $script:GuiScriptContent | Should Match 'Add_ProgressChanged'
+        $script:GuiScriptContent | Should Match 'Add_RunWorkerCompleted'
+    }
+
+    It 'tracks summary status fields and the final report path' {
+        $requiredVariables = @(
+            'phaseValueLabel',
+            'readableValueLabel',
+            'skippedValueLabel',
+            'duplicatesValueLabel',
+            'reportPathTextBox'
+        )
+
+        foreach ($variableName in $requiredVariables) {
+            $script:GuiScriptContent | Should Match ([regex]::Escape('$' + $variableName))
+        }
+    }
+
+    It 'counts unreadable, empty-file, and minimum-size skips in the skipped status summary' {
+        $script:GuiScriptContent | Should Match 'SkippedUnreadableItemCount\s*\+\s*\$scanResult\.SkippedEmptyFileCount\s*\+\s*\$scanResult\.SkippedMinimumSizeFileCount'
+    }
+}
+
+Describe 'DupliView documentation set' {
+    It 'includes the planned user guides and support docs' {
+        $requiredDocs = @(
+            'CONTRIBUTING.md',
+            'docs\README.md',
+            'docs\RELEASE_CHECKLIST.md',
+            'docs\SCREENSHOTS.md',
+            'docs\guides\first-scan.md',
+            'docs\guides\network-drive-scan.md',
+            'docs\guides\read-the-csv.md',
+            'docs\guides\skipped-files-and-errors.md',
+            'docs\guides\share-with-coworkers.md',
+            'docs\guides\troubleshooting.md'
+        )
+
+        foreach ($relativePath in $requiredDocs) {
+            Test-Path -LiteralPath (Join-Path $ProjectRoot $relativePath) | Should Be $true
+        }
+    }
+
+    It 'keeps each user guide report-only and avoids cleanup instructions' {
+        $guidePaths = @(
+            'docs\guides\first-scan.md',
+            'docs\guides\network-drive-scan.md',
+            'docs\guides\read-the-csv.md',
+            'docs\guides\skipped-files-and-errors.md',
+            'docs\guides\share-with-coworkers.md',
+            'docs\guides\troubleshooting.md'
+        )
+
+        foreach ($relativePath in $guidePaths) {
+            $content = [System.IO.File]::ReadAllText((Join-Path $ProjectRoot $relativePath))
+            $content | Should Match 'report-only'
+            $content | Should Match 'What this does not do'
+            $content | Should Not Match '(?im)^\s*\d+\.\s+.*\b(delete|remove|move|rename|cleanup|quarantine|recycle)\b'
+            $content | Should Not Match '(?im)^\s*-\s+.*\b(delete|remove|move|rename|cleanup|quarantine|recycle)\b'
+        }
+    }
+
+    It 'documents release and contribution safety checks' {
+        $releaseChecklist = [System.IO.File]::ReadAllText((Join-Path $ProjectRoot 'docs\RELEASE_CHECKLIST.md'))
+        $contributing = [System.IO.File]::ReadAllText((Join-Path $ProjectRoot 'CONTRIBUTING.md'))
+
+        $releaseChecklist | Should Match 'Invoke-Pester'
+        $releaseChecklist | Should Match 'Reports/\*\.csv'
+        $contributing | Should Match 'report-only'
+        $contributing | Should Match 'Pull requests'
+    }
+
+    It 'uses screenshots as published docs instead of process notes' {
+        $screenshots = [System.IO.File]::ReadAllText((Join-Path $ProjectRoot 'docs\SCREENSHOTS.md'))
+
+        $screenshots | Should Match 'single-screen Windows Forms utility'
+        $screenshots | Should Not Match 'Screenshots To Capture'
+        $screenshots | Should Not Match 'Current Status'
+        Test-Path -LiteralPath (Join-Path $ProjectRoot 'docs\images\README.md') | Should Be $false
+    }
+}
+
 Describe 'DupliView production script safety scan' {
     It 'does not invoke dangerous commands from production scripts' {
         $productionScripts = @(
@@ -340,8 +456,10 @@ Describe 'DupliView production script safety scan' {
             'Start-Process',
             'Set-ItemProperty',
             'New-ItemProperty',
+            'Invoke-Item',
             'reg.exe',
             'schtasks.exe',
+            'explorer.exe',
             'curl',
             'wget',
             'iwr',
