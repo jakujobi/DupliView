@@ -219,7 +219,7 @@ function Add-DupliViewScanLocation {
         [string] $Path
     )
 
-    $cleanPath = $Path.Trim()
+    $cleanPath = Normalize-DupliViewContainerPath -Path $Path
 
     foreach ($existingPath in $ListBox.Items) {
         if ([string]::Equals([string] $existingPath, $cleanPath, [System.StringComparison]::OrdinalIgnoreCase)) {
@@ -341,10 +341,85 @@ function Complete-DupliViewStatus {
     $copyReportPathButton.Enabled = -not [string]::IsNullOrWhiteSpace($WorkerResult.ReportPath)
 }
 
-$defaultReportFolder = Join-Path $ScriptRoot $DefaultReportFolderName
-if (-not (Test-Path -LiteralPath $defaultReportFolder -PathType Container)) {
-    [void] (New-Item -ItemType Directory -Path $defaultReportFolder -Force)
+function Get-DupliViewPhaseFromMessage {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Message
+    )
+
+    if ($Message -like 'Step 1:*') { return 'Preparing' }
+    if ($Message -like 'Step 2:*') { return 'Collecting files' }
+    if ($Message -like 'Step 3:*') { return 'Grouping by size' }
+    if ($Message -like 'Step 4:*') { return 'Hashing' }
+    if ($Message -like 'Step 5:*') { return 'Grouping by hash' }
+    if ($Message -like 'Step 6:*') { return 'Writing report' }
+
+    return $null
 }
+
+function Process-DupliViewScanMessage {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Message
+    )
+
+    $phase = Get-DupliViewPhaseFromMessage -Message $Message
+    if ($phase) {
+        Set-DupliViewPhase -Phase $phase
+    }
+
+    Add-DupliViewLogMessage -LogTextBox $logTextBox -Message $Message
+}
+
+function Process-DupliViewScanUpdate {
+    param(
+        [Parameter(Mandatory = $true)]
+        $ScanUpdate
+    )
+
+    foreach ($message in $ScanUpdate.Messages) {
+        Process-DupliViewScanMessage -Message $message
+    }
+}
+
+function Stop-DupliViewActiveScanOperation {
+    if ($script:DupliViewScanOperation) {
+        Stop-DupliViewAsyncScan -ScanOperation $script:DupliViewScanOperation
+        $script:DupliViewScanOperation = $null
+    }
+}
+
+function Complete-DupliViewScanRun {
+    param(
+        [Parameter(Mandatory = $true)]
+        $ScanUpdate
+    )
+
+    $scanProgressTimer.Stop()
+    $result = $ScanUpdate.Result
+    $script:DupliViewScanOperation = $null
+    $script:DupliViewScanRunning = $false
+    Set-DupliViewScanControlsEnabled -Enabled $true
+
+    if (-not $result.Success) {
+        $phaseValueLabel.Text = 'Stopped'
+        Add-DupliViewLogMessage -LogTextBox $logTextBox -Message ('Scan stopped: {0}' -f $result.Error)
+        [void] [System.Windows.Forms.MessageBox]::Show($form, ('DupliView could not finish the scan:{0}{1}' -f [Environment]::NewLine, $result.Error), 'DupliView', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning)
+        return
+    }
+
+    Complete-DupliViewStatus -WorkerResult $result
+
+    if ($result.ErrorReportPath) {
+        Add-DupliViewLogMessage -LogTextBox $logTextBox -Message ('Error report saved to: {0}' -f $result.ErrorReportPath)
+    }
+
+    Add-DupliViewLogMessage -LogTextBox $logTextBox -Message 'Done.'
+    Add-DupliViewLogMessage -LogTextBox $logTextBox -Message ('Report saved to: {0}' -f $result.ReportPath)
+    [void] [System.Windows.Forms.MessageBox]::Show($form, ('Report saved to:{0}{1}' -f [Environment]::NewLine, $result.ReportPath), 'DupliView', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
+}
+
+$defaultReportFolder = Join-Path $ScriptRoot $DefaultReportFolderName
 
 $form = New-Object System.Windows.Forms.Form
 $form.Text = 'DupliView'
@@ -354,6 +429,10 @@ $form.MinimumSize = New-DupliViewSize 860 660
 $form.Font = New-DupliViewFont 9
 $form.BackColor = [System.Drawing.Color]::FromArgb(245, 247, 250)
 $script:DupliViewScanRunning = $false
+$script:DupliViewScanOperation = $null
+
+$scanProgressTimer = New-Object System.Windows.Forms.Timer
+$scanProgressTimer.Interval = 150
 
 $mainLayout = New-Object System.Windows.Forms.TableLayoutPanel
 $mainLayout.Dock = 'Fill'
@@ -587,116 +666,31 @@ $startScanButton = New-DupliViewButton -Text 'Start Scan' -Width 132 -Primary
 [void] $actionPanel.Controls.Add($closeButton)
 [void] $actionPanel.Controls.Add($startScanButton)
 
-$scanWorker = New-Object System.ComponentModel.BackgroundWorker
-$scanWorker.WorkerReportsProgress = $true
-
-$scanWorker.Add_DoWork({
-    param($Sender, $EventArgs)
-
-    $arguments = $EventArgs.Argument
-    $worker = $Sender
+$scanProgressTimer.Add_Tick({
+    if (-not $script:DupliViewScanOperation) {
+        $scanProgressTimer.Stop()
+        return
+    }
 
     try {
-        $worker.ReportProgress(0, (New-DupliViewProgressMessage -Kind 'Phase' -Phase 'Preparing'))
-        $worker.ReportProgress(0, (New-DupliViewProgressMessage -Kind 'Log' -Message 'Step 1: Preparing scan...'))
-
-        $minimumSizeBytes = Convert-DupliViewMinimumSizeToBytes -MinimumSizeMB $arguments.MinimumSizeMB
-
-        $scanResult = Get-DupliViewDuplicateRecords `
-            -ScanLocations $arguments.ScanLocations `
-            -MinimumSizeBytes $minimumSizeBytes `
-            -SkipEmptyFiles $arguments.SkipEmptyFiles `
-            -HashAlgorithm $arguments.HashAlgorithm `
-            -ProgressCallback {
-                param($Message)
-                $phase = $null
-
-                if ($Message -like 'Step 2:*') { $phase = 'Collecting files' }
-                elseif ($Message -like 'Step 3:*') { $phase = 'Grouping by size' }
-                elseif ($Message -like 'Step 4:*') { $phase = 'Hashing' }
-                elseif ($Message -like 'Step 5:*') { $phase = 'Grouping by hash' }
-
-                if ($phase) {
-                    $worker.ReportProgress(0, (New-DupliViewProgressMessage -Kind 'Phase' -Phase $phase))
-                }
-
-                $worker.ReportProgress(0, (New-DupliViewProgressMessage -Kind 'Log' -Message $Message))
-            }
-
-        $worker.ReportProgress(0, (New-DupliViewProgressMessage -Kind 'Phase' -Phase 'Writing report'))
-        $worker.ReportProgress(0, (New-DupliViewProgressMessage -Kind 'Log' -Message 'Step 6: Writing CSV report...'))
-
-        $timestamp = Get-Date
-        $reportFileName = New-DupliViewReportFileName -ScanLocations $arguments.ScanLocations -Timestamp $timestamp
-        $reportPath = Export-DupliViewDuplicateReport -Records $scanResult.DuplicateRecords -ExportFolder $arguments.ExportFolder -FileName $reportFileName -CsvColumns $arguments.CsvColumns
-
-        $errorReportPath = $null
-        if ($arguments.CreateErrorLog -and $scanResult.ErrorRecords.Count -gt 0) {
-            $errorFileName = New-DupliViewReportFileName -ScanLocations $arguments.ScanLocations -Timestamp $timestamp -ErrorReport
-            $errorReportPath = Export-DupliViewErrorReport -ErrorRecords $scanResult.ErrorRecords -ExportFolder $arguments.ExportFolder -FileName $errorFileName
-        }
-
-        $EventArgs.Result = [pscustomobject] @{
-            Success = $true
-            ScanResult = $scanResult
-            ReportPath = $reportPath
-            ErrorReportPath = $errorReportPath
-        }
+        $scanUpdate = Read-DupliViewAsyncScanUpdate -ScanOperation $script:DupliViewScanOperation
     }
     catch {
-        $EventArgs.Result = [pscustomobject] @{
-            Success = $false
-            Error = $_.Exception.Message
+        $scanUpdate = [pscustomobject] @{
+            Messages = @()
+            IsCompleted = $true
+            Result = [pscustomobject] @{
+                Success = $false
+                Error = $_.Exception.Message
+            }
         }
     }
-})
 
-$scanWorker.Add_ProgressChanged({
-    param($Sender, $EventArgs)
+    Process-DupliViewScanUpdate -ScanUpdate $scanUpdate
 
-    $message = $EventArgs.UserState
-    if (-not $message) {
-        return
+    if ($scanUpdate.IsCompleted) {
+        Complete-DupliViewScanRun -ScanUpdate $scanUpdate
     }
-
-    if ($message.Kind -eq 'Phase') {
-        Set-DupliViewPhase -Phase $message.Phase
-    }
-    elseif ($message.Kind -eq 'Log') {
-        Add-DupliViewLogMessage -LogTextBox $logTextBox -Message $message.Message
-    }
-})
-
-$scanWorker.Add_RunWorkerCompleted({
-    param($Sender, $EventArgs)
-
-    $script:DupliViewScanRunning = $false
-    Set-DupliViewScanControlsEnabled -Enabled $true
-
-    if ($EventArgs.Error) {
-        $phaseValueLabel.Text = 'Stopped'
-        Add-DupliViewLogMessage -LogTextBox $logTextBox -Message ('Scan stopped: {0}' -f $EventArgs.Error.Message)
-        [void] [System.Windows.Forms.MessageBox]::Show($form, ('DupliView could not finish the scan:{0}{1}' -f [Environment]::NewLine, $EventArgs.Error.Message), 'DupliView', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning)
-        return
-    }
-
-    $result = $EventArgs.Result
-    if (-not $result.Success) {
-        $phaseValueLabel.Text = 'Stopped'
-        Add-DupliViewLogMessage -LogTextBox $logTextBox -Message ('Scan stopped: {0}' -f $result.Error)
-        [void] [System.Windows.Forms.MessageBox]::Show($form, ('DupliView could not finish the scan:{0}{1}' -f [Environment]::NewLine, $result.Error), 'DupliView', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning)
-        return
-    }
-
-    Complete-DupliViewStatus -WorkerResult $result
-
-    if ($result.ErrorReportPath) {
-        Add-DupliViewLogMessage -LogTextBox $logTextBox -Message ('Error report saved to: {0}' -f $result.ErrorReportPath)
-    }
-
-    Add-DupliViewLogMessage -LogTextBox $logTextBox -Message 'Done.'
-    Add-DupliViewLogMessage -LogTextBox $logTextBox -Message ('Report saved to: {0}' -f $result.ReportPath)
-    [void] [System.Windows.Forms.MessageBox]::Show($form, ('Report saved to:{0}{1}' -f [Environment]::NewLine, $result.ReportPath), 'DupliView', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
 })
 
 $addFolderButton.Add_Click({
@@ -757,7 +751,7 @@ $copyReportPathButton.Add_Click({
 })
 
 $startScanButton.Add_Click({
-    if ($scanWorker.IsBusy) {
+    if ($script:DupliViewScanOperation) {
         return
     }
 
@@ -766,25 +760,34 @@ $startScanButton.Add_Click({
         return
     }
 
-    $scanLocations = @()
+    $scanLocations = New-Object System.Collections.ArrayList
+    $seenScanLocations = @{}
     foreach ($location in $locationsList.Items) {
         $path = [string] $location
         if (-not (Test-Path -LiteralPath $path -PathType Container)) {
             [void] [System.Windows.Forms.MessageBox]::Show($form, ('This scan location no longer exists: {0}' -f $path), 'DupliView', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
             return
         }
-        $scanLocations += $path
+
+        $normalizedPath = Normalize-DupliViewContainerPath -Path $path
+        if ($seenScanLocations.ContainsKey($normalizedPath)) {
+            continue
+        }
+
+        $seenScanLocations[$normalizedPath] = $true
+        [void] $scanLocations.Add($normalizedPath)
     }
 
     $exportFolder = $exportFolderTextBox.Text
-    if (-not (Test-Path -LiteralPath $exportFolder -PathType Container)) {
-        if ([string]::Equals($exportFolder, $defaultReportFolder, [System.StringComparison]::OrdinalIgnoreCase)) {
-            [void] (New-Item -ItemType Directory -Path $exportFolder -Force)
-        }
-        else {
-            [void] [System.Windows.Forms.MessageBox]::Show($form, 'Export folder no longer exists. Choose an existing export folder and try again.', 'DupliView', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
-            return
-        }
+    try {
+        $exportFolder = Ensure-DupliViewExportFolder -ExportFolder $exportFolder -DefaultExportFolder $defaultReportFolder
+    }
+    catch {
+        $phaseValueLabel.Text = 'Stopped'
+        Add-DupliViewLogMessage -LogTextBox $logTextBox -Message ('Scan stopped: {0}' -f $_.Exception.Message)
+        [void] [System.Windows.Forms.MessageBox]::Show($form, ('DupliView could not start the scan:{0}{1}' -f [Environment]::NewLine, $_.Exception.Message), 'DupliView', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning)
+        [void] $chooseExportButton.Focus()
+        return
     }
 
     Reset-DupliViewStatus
@@ -793,7 +796,7 @@ $startScanButton.Add_Click({
     Set-DupliViewScanControlsEnabled -Enabled $false
 
     $workerArguments = [pscustomobject] @{
-        ScanLocations = $scanLocations
+        ScanLocations = @($scanLocations)
         ExportFolder = $exportFolder
         MinimumSizeMB = [double] $minimumSizeControl.Value
         SkipEmptyFiles = [bool] $skipEmptyFilesCheckBox.Checked
@@ -802,7 +805,17 @@ $startScanButton.Add_Click({
         CsvColumns = $CsvColumns
     }
 
-    $scanWorker.RunWorkerAsync($workerArguments)
+    try {
+        $script:DupliViewScanOperation = Start-DupliViewAsyncScan -Arguments $workerArguments
+        $scanProgressTimer.Start()
+    }
+    catch {
+        $script:DupliViewScanRunning = $false
+        $phaseValueLabel.Text = 'Stopped'
+        Set-DupliViewScanControlsEnabled -Enabled $true
+        Add-DupliViewLogMessage -LogTextBox $logTextBox -Message ('Scan stopped: {0}' -f $_.Exception.Message)
+        [void] [System.Windows.Forms.MessageBox]::Show($form, ('DupliView could not start the scan:{0}{1}' -f [Environment]::NewLine, $_.Exception.Message), 'DupliView', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning)
+    }
 })
 
 $closeButton.Add_Click({
@@ -820,3 +833,6 @@ $form.Add_FormClosing({
 
 Reset-DupliViewStatus
 [void] $form.ShowDialog()
+$scanProgressTimer.Stop()
+Stop-DupliViewActiveScanOperation
+$scanProgressTimer.Dispose()

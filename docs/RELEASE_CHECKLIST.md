@@ -34,10 +34,13 @@ Check:
 - `Run DupliView.cmd` opens the GUI.
 - `Add Folder` adds a folder.
 - `Add Manual Path` accepts a valid existing path.
+- Entering the same location again with a trailing-slash difference keeps one list entry.
 - `Remove Selected` and `Clear All` work.
 - `Choose Folder` changes the report destination.
+- Leaving the default `Reports` folder selected creates it when `Start Scan` begins, not when the GUI opens.
 - `Minimum size (MB)`, `Skip empty files`, and `Create error CSV` can be changed.
 - `Start Scan` writes a CSV report.
+- If the app folder is read-only, choosing another export folder still lets the scan start.
 - `Copy Report Path` copies the final report path.
 - The window stays responsive during a scan.
 - The final CSV opens in Excel or a text editor.

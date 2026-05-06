@@ -7,10 +7,12 @@ It never deletes, moves, renames, overwrites, uploads, or modifies scanned files
 2. Double-click "Run DupliView.cmd".
 3. Click "Add Folder".
 4. Choose the folder or drive to scan.
-5. Choose an export folder if needed.
-6. Review the scan options.
-7. Click "Start Scan".
-8. Open the CSV report in Excel.
+5. Keep the default "Reports" folder or choose another export folder.
+6. The default "Reports" folder is created when the scan starts.
+7. If this folder is read-only, click "Choose Folder" and pick a writable export folder.
+8. Review the scan options.
+9. Click "Start Scan".
+10. Open the CSV report in Excel.
 
 If your computer blocks the launcher, do not disable antivirus.
 Ask IT or the repository owner to review the DupliView folder.

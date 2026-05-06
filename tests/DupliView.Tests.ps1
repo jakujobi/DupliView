@@ -44,6 +44,36 @@ function New-DupliViewTestRoot {
     return $root
 }
 
+function Wait-DupliViewAsyncScan {
+    param(
+        [Parameter(Mandatory = $true)]
+        $ScanOperation,
+
+        [int] $TimeoutMilliseconds = 15000
+    )
+
+    $messages = New-Object System.Collections.ArrayList
+    $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+
+    while (-not $ScanOperation.AsyncResult.IsCompleted) {
+        foreach ($message in (Receive-DupliViewAsyncScanProgress -ScanOperation $ScanOperation)) {
+            [void] $messages.Add($message)
+        }
+
+        if ($stopwatch.ElapsedMilliseconds -ge $TimeoutMilliseconds) {
+            throw 'Timed out waiting for async scan completion.'
+        }
+
+        Start-Sleep -Milliseconds 50
+    }
+
+    foreach ($message in (Receive-DupliViewAsyncScanProgress -ScanOperation $ScanOperation)) {
+        [void] $messages.Add($message)
+    }
+
+    return $messages
+}
+
 $TestCsvColumns = @(
     'DuplicateGroup',
     'GroupFileCount',
@@ -221,6 +251,163 @@ Describe 'DupliView report filenames and size conversion' {
     }
 }
 
+Describe 'DupliView path normalization and export folder handling' {
+    BeforeEach {
+        $script:TestRoot = New-DupliViewTestRoot
+    }
+
+    AfterEach {
+        if ($script:TestRoot -and (Test-Path -LiteralPath $script:TestRoot)) {
+            Remove-Item -LiteralPath $script:TestRoot -Recurse -Force
+        }
+    }
+
+    It 'normalizes local container paths with or without trailing slash' {
+        $folder = Join-Path $script:TestRoot 'FolderA'
+        New-Item -ItemType Directory -Path $folder -Force | Out-Null
+
+        $normalized1 = Normalize-DupliViewContainerPath -Path $folder
+        $normalized2 = Normalize-DupliViewContainerPath -Path ($folder + '\')
+
+        $normalized1 | Should Be $normalized2
+    }
+
+    It 'normalizes UNC share paths with or without trailing slash' {
+        Mock -CommandName Test-Path -MockWith { $true } -ParameterFilter {
+            $LiteralPath -in @('\\server\share', '\\server\share\')
+        }
+        Mock -CommandName Convert-Path -MockWith {
+            if ($LiteralPath -eq '\\server\share\') {
+                return '\\server\share\'
+            }
+
+            return '\\server\share'
+        } -ParameterFilter {
+            $LiteralPath -in @('\\server\share', '\\server\share\')
+        }
+
+        $normalized1 = Normalize-DupliViewContainerPath -Path '\\server\share'
+        $normalized2 = Normalize-DupliViewContainerPath -Path '\\server\share\'
+
+        $normalized1 | Should Be $normalized2
+        $normalized1 | Should Be '\\server\share'
+    }
+
+    It 'returns an existing export folder unchanged' {
+        $result = Ensure-DupliViewExportFolder -ExportFolder $script:TestRoot -DefaultExportFolder (Join-Path $script:TestRoot 'Reports')
+
+        $result | Should Be (Convert-Path -LiteralPath $script:TestRoot)
+    }
+
+    It 'creates the default export folder lazily when it is missing' {
+        $defaultFolder = Join-Path $script:TestRoot 'Reports'
+
+        (Test-Path -LiteralPath $defaultFolder -PathType Container) | Should Be $false
+        $result = Ensure-DupliViewExportFolder -ExportFolder $defaultFolder -DefaultExportFolder $defaultFolder
+
+        (Test-Path -LiteralPath $defaultFolder -PathType Container) | Should Be $true
+        $result | Should Be (Convert-Path -LiteralPath $defaultFolder)
+    }
+
+    It 'rejects a missing non-default export folder' {
+        $missingFolder = Join-Path $script:TestRoot 'MissingReports'
+        $threw = $false
+
+        try {
+            Ensure-DupliViewExportFolder -ExportFolder $missingFolder -DefaultExportFolder (Join-Path $script:TestRoot 'Reports') | Out-Null
+        }
+        catch {
+            $threw = $true
+            $_.Exception.Message | Should Be 'Export folder no longer exists. Choose an existing export folder and try again.'
+        }
+
+        $threw | Should Be $true
+    }
+
+    It 'surfaces a clear message when the default export folder cannot be created' {
+        $defaultFolder = Join-Path $script:TestRoot 'Reports'
+        Mock -CommandName New-Item -MockWith { throw 'access denied' } -ParameterFilter {
+            $ItemType -eq 'Directory' -and $Path -eq $defaultFolder
+        }
+
+        $threw = $false
+        try {
+            Ensure-DupliViewExportFolder -ExportFolder $defaultFolder -DefaultExportFolder $defaultFolder | Out-Null
+        }
+        catch {
+            $threw = $true
+            $_.Exception.Message | Should Be 'The default Reports folder could not be created here. Choose another export folder and try again.'
+        }
+
+        $threw | Should Be $true
+    }
+}
+
+Describe 'DupliView async scanning' {
+    BeforeEach {
+        $script:TestRoot = New-DupliViewTestRoot
+    }
+
+    AfterEach {
+        if ($script:ScanOperation) {
+            Stop-DupliViewAsyncScan -ScanOperation $script:ScanOperation
+            $script:ScanOperation = $null
+        }
+
+        if ($script:TestRoot -and (Test-Path -LiteralPath $script:TestRoot)) {
+            Remove-Item -LiteralPath $script:TestRoot -Recurse -Force
+        }
+    }
+
+    It 'reads progress updates and completion state from an async scan' {
+        New-TestFile -Path (Join-Path $script:TestRoot 'A\same1.txt') -Content 'hello duplicate'
+        New-TestFile -Path (Join-Path $script:TestRoot 'B\same2.txt') -Content 'hello duplicate'
+
+        $arguments = [pscustomobject] @{
+            ScanLocations = @($script:TestRoot)
+            ExportFolder = $script:TestRoot
+            MinimumSizeMB = 0
+            SkipEmptyFiles = $true
+            CreateErrorLog = $false
+            HashAlgorithm = 'SHA256'
+            CsvColumns = $TestCsvColumns
+        }
+
+        $script:ScanOperation = Start-DupliViewAsyncScan -CoreScriptPath $CoreScript -Arguments $arguments
+        $allMessages = New-Object System.Collections.ArrayList
+        $result = $null
+        $isCompleted = $false
+        $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+
+        while (-not $isCompleted) {
+            $update = Read-DupliViewAsyncScanUpdate -ScanOperation $script:ScanOperation
+            foreach ($message in $update.Messages) {
+                [void] $allMessages.Add($message)
+            }
+
+            $isCompleted = $update.IsCompleted
+            $result = $update.Result
+
+            if (-not $isCompleted) {
+                if ($stopwatch.ElapsedMilliseconds -ge 15000) {
+                    throw 'Timed out waiting for async scan completion.'
+                }
+
+                Start-Sleep -Milliseconds 50
+            }
+        }
+
+        $script:ScanOperation = $null
+
+        $isCompleted | Should Be $true
+        $result.Success | Should Be $true
+        $result.ScanResult.DuplicateGroupCount | Should Be 1
+        (Test-Path -LiteralPath $result.ReportPath) | Should Be $true
+        (@($allMessages) | Where-Object { $_ -like 'Step 2:*' }).Count | Should Be 1
+        (@($allMessages) | Where-Object { $_ -like 'Step 6:*' }).Count | Should Be 1
+    }
+}
+
 Describe 'DupliView CSV export' {
     BeforeEach {
         $script:TestRoot = New-DupliViewTestRoot
@@ -347,12 +534,15 @@ Describe 'DupliView GUI refresh' {
         }
     }
 
-    It 'uses a background worker and UI-safe progress messages for scanning' {
-        $script:GuiScriptContent | Should Match 'System\.ComponentModel\.BackgroundWorker'
-        $script:GuiScriptContent | Should Match 'WorkerReportsProgress'
-        $script:GuiScriptContent | Should Match 'ReportProgress'
-        $script:GuiScriptContent | Should Match 'Add_ProgressChanged'
-        $script:GuiScriptContent | Should Match 'Add_RunWorkerCompleted'
+    It 'uses a runspace-backed scan runner instead of a background worker' {
+        $script:GuiScriptContent | Should Match 'Start-DupliViewAsyncScan'
+        $script:GuiScriptContent | Should Match 'Read-DupliViewAsyncScanUpdate'
+        $script:GuiScriptContent | Should Not Match 'System\.ComponentModel\.BackgroundWorker'
+        $script:GuiScriptContent | Should Not Match 'RunWorkerAsync'
+    }
+
+    It 'does not eagerly create the default report folder during startup' {
+        $script:GuiScriptContent | Should Not Match '(?s)\$defaultReportFolder\s*=\s*Join-Path\s+\$ScriptRoot\s+\$DefaultReportFolderName\s*if\s*\(-not\s*\(Test-Path\s+-LiteralPath\s+\$defaultReportFolder\s+-PathType\s+Container\)\)\s*\{\s*\[void\]\s*\(New-Item\s+-ItemType\s+Directory\s+-Path\s+\$defaultReportFolder\s+-Force\)\s*\}'
     }
 
     It 'tracks summary status fields and the final report path' {

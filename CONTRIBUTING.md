@@ -53,7 +53,8 @@ Do not add production dependencies for normal users.
 - Keep scan logic testable outside the GUI.
 - Prefer clear function names over clever code.
 - Add comments only where they explain safety or non-obvious behavior.
-- Keep writes limited to the default `Reports` folder and selected report output files.
+- Keep writes limited to the lazily created default `Reports` folder and selected report output files.
+- Do not require the DupliView folder to be writable before a user starts a scan.
 
 ## Documentation Style
 

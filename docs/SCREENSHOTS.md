@@ -4,7 +4,7 @@ The DupliView window is a single-screen Windows Forms utility.
 
 ## Main window
 
-The main window keeps the scan locations, report destination, scan options, status summary, and live log on one screen.
+The main window keeps the scan locations, report destination, scan options, status summary, and live log on one screen. The default `Reports` folder is created when a scan starts, not when the window opens.
 
 ## What this does not do
 

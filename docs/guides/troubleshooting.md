@@ -13,9 +13,20 @@ Common causes:
 - Windows blocked the PowerShell script because the folder came from a downloaded ZIP.
 - Antivirus or endpoint security blocked the PowerShell command line.
 - The DupliView folder was copied without all project files.
-- The user account cannot read the selected folder or write to the report folder.
+- The user account cannot read the DupliView folder or one of its required files.
 
 Do not disable antivirus to run DupliView. If a work computer blocks PowerShell scripts, ask IT to review the DupliView folder and the source files.
+
+## The scan will not start because the report folder is not writable
+
+If the DupliView folder is read-only, the window can still open. DupliView tries to create the default `Reports` folder only when the scan starts.
+
+If the live log or warning says DupliView could not create the default `Reports` folder:
+
+1. Click `Choose Folder`.
+2. Pick another writable folder for the report.
+3. Click `Start Scan` again.
+4. If a custom export folder also fails, check that your Windows account can write there.
 
 ## Antivirus reports suspicious PowerShell activity
 

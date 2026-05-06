@@ -16,7 +16,10 @@ For setup and basic requirements, see the README.
 2. Click `Add Manual Path`.
 3. Enter a mapped drive path such as `L:\`.
 4. Confirm the path.
+   If the same location is already listed with or without a trailing slash, DupliView keeps one entry.
 5. Check `Report destination`.
+   You can keep the default `Reports` folder or choose another writable location.
+   If the DupliView folder is read-only, click `Choose Folder` before you start the scan.
 6. Review `Scan options`.
 7. Set `Minimum size (MB)` if you want to ignore very small files.
 8. Leave `Skip empty files` checked if zero-byte files are not useful for this scan.
@@ -28,7 +31,9 @@ For setup and basic requirements, see the README.
 1. Click `Add Manual Path`.
 2. Enter a shared path such as `\\server\share`.
 3. Confirm the path.
-4. Click `Start Scan` when your locations and options are ready.
+   If the same path is already listed with or without a trailing slash, DupliView keeps one entry.
+4. Check `Report destination`, then click `Choose Folder` if the DupliView folder is read-only.
+5. Click `Start Scan` when your locations and options are ready.
 
 ## Why It Can Take Time
 

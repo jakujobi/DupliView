@@ -33,6 +33,7 @@ The app also avoids "open folder" shortcuts that launch other programs. When a s
 - Runs through a `.cmd` or `.bat` launcher.
 - Clean Windows Forms interface with one main screen.
 - Supports folders, drives, mapped drives such as `L:\`, and UNC paths such as `\\server\share`.
+- Keeps one scan-location entry when the same folder is added again with different trailing slashes.
 - Live status for current phase, readable files, skipped files, duplicate groups, and final report path.
 - Live log that shows each scan step.
 - Scan options for minimum file size, empty-file handling, and optional error CSV output.
@@ -71,7 +72,9 @@ powershell.exe -NoProfile -STA -ExecutionPolicy Bypass -File "%~dp0DupliView.ps1
 1. Click `Add Folder`.
 2. Choose one or more folders or drives.
 3. Use `Add Manual Path` for mapped drives or UNC paths.
-4. Choose an existing export folder if you do not want to use the default `Reports` folder.
+   If you add the same location again with a trailing-slash difference, DupliView keeps one entry.
+4. Keep the default `Reports` folder or choose an existing export folder.
+   DupliView creates the default `Reports` folder when the scan starts. If the DupliView folder is read-only, click `Choose Folder` and pick another writable location.
 5. Adjust scan options if needed.
 6. Click `Start Scan`.
 7. Watch the scan status and live log.

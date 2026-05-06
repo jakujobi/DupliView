@@ -1,3 +1,7 @@
+if (-not $script:DupliViewCoreScriptPath) {
+    $script:DupliViewCoreScriptPath = $PSCommandPath
+}
+
 function Invoke-DupliViewProgress {
     param(
         [scriptblock] $ProgressCallback,
@@ -75,6 +79,69 @@ function Get-DupliViewSafeSourceName {
     }
 
     return Get-DupliViewSafeFileNamePart -Name $withoutTrailingSlash
+}
+
+function Normalize-DupliViewContainerPath {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Path
+    )
+
+    $trimmedPath = $Path.Trim()
+    $resolvedPath = [string] (Convert-Path -LiteralPath $trimmedPath)
+
+    if ($resolvedPath -match '^[A-Za-z]:\\$') {
+        return $resolvedPath
+    }
+
+    if ($resolvedPath -match '^[\\/]{2}[^\\/]+[\\/]([^\\/]+)[\\/]?$') {
+        return $resolvedPath.TrimEnd([char[]] @('\', '/'))
+    }
+
+    return $resolvedPath.TrimEnd([char[]] @('\', '/'))
+}
+
+function Ensure-DupliViewExportFolder {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $ExportFolder,
+
+        [Parameter(Mandatory = $true)]
+        [string] $DefaultExportFolder
+    )
+
+    if (Test-Path -LiteralPath $ExportFolder -PathType Container) {
+        return [string] (Convert-Path -LiteralPath $ExportFolder)
+    }
+
+    $comparisonExportFolder = $ExportFolder.Trim()
+    $comparisonDefaultFolder = $DefaultExportFolder.Trim()
+
+    if ($comparisonExportFolder -notmatch '^[A-Za-z]:\\$') {
+        $comparisonExportFolder = $comparisonExportFolder.TrimEnd([char[]] @('\', '/'))
+    }
+
+    if ($comparisonDefaultFolder -notmatch '^[A-Za-z]:\\$') {
+        $comparisonDefaultFolder = $comparisonDefaultFolder.TrimEnd([char[]] @('\', '/'))
+    }
+
+    $isDefaultExportFolder = [string]::Equals(
+        $comparisonExportFolder,
+        $comparisonDefaultFolder,
+        [System.StringComparison]::OrdinalIgnoreCase
+    )
+
+    if (-not $isDefaultExportFolder) {
+        throw 'Export folder no longer exists. Choose an existing export folder and try again.'
+    }
+
+    try {
+        [void] (New-Item -ItemType Directory -Path $ExportFolder -Force -ErrorAction Stop)
+        return [string] (Convert-Path -LiteralPath $ExportFolder)
+    }
+    catch {
+        throw 'The default Reports folder could not be created here. Choose another export folder and try again.'
+    }
 }
 
 function New-DupliViewReportFileName {
@@ -359,6 +426,217 @@ function Get-DupliViewDuplicateRecords {
         HashedFileCount = $hashRecords.Count
         DuplicateGroupCount = $duplicateHashGroups.Count
         SkippedUnreadableItemCount = $errorRecords.Count
+    }
+}
+
+function Invoke-DupliViewScanOperation {
+    param(
+        [Parameter(Mandatory = $true)]
+        $Arguments,
+
+        [scriptblock] $ProgressCallback
+    )
+
+    try {
+        Invoke-DupliViewProgress -ProgressCallback $ProgressCallback -Message 'Step 1: Preparing scan...'
+
+        $minimumSizeBytes = Convert-DupliViewMinimumSizeToBytes -MinimumSizeMB $Arguments.MinimumSizeMB
+        $scanResult = Get-DupliViewDuplicateRecords `
+            -ScanLocations $Arguments.ScanLocations `
+            -MinimumSizeBytes $minimumSizeBytes `
+            -SkipEmptyFiles $Arguments.SkipEmptyFiles `
+            -HashAlgorithm $Arguments.HashAlgorithm `
+            -ProgressCallback $ProgressCallback
+
+        Invoke-DupliViewProgress -ProgressCallback $ProgressCallback -Message 'Step 6: Writing CSV report...'
+
+        $timestamp = Get-Date
+        $reportFileName = New-DupliViewReportFileName -ScanLocations $Arguments.ScanLocations -Timestamp $timestamp
+        $reportPath = Export-DupliViewDuplicateReport -Records $scanResult.DuplicateRecords -ExportFolder $Arguments.ExportFolder -FileName $reportFileName -CsvColumns $Arguments.CsvColumns
+
+        $errorReportPath = $null
+        if ($Arguments.CreateErrorLog -and $scanResult.ErrorRecords.Count -gt 0) {
+            $errorFileName = New-DupliViewReportFileName -ScanLocations $Arguments.ScanLocations -Timestamp $timestamp -ErrorReport
+            $errorReportPath = Export-DupliViewErrorReport -ErrorRecords $scanResult.ErrorRecords -ExportFolder $Arguments.ExportFolder -FileName $errorFileName
+        }
+
+        return [pscustomobject] @{
+            Success = $true
+            ScanResult = $scanResult
+            ReportPath = $reportPath
+            ErrorReportPath = $errorReportPath
+        }
+    }
+    catch {
+        return [pscustomobject] @{
+            Success = $false
+            Error = $_.Exception.Message
+        }
+    }
+}
+
+function Start-DupliViewAsyncScan {
+    param(
+        [Parameter(Mandatory = $true)]
+        $Arguments,
+
+        [string] $CoreScriptPath = $script:DupliViewCoreScriptPath
+    )
+
+    if ([string]::IsNullOrWhiteSpace($CoreScriptPath) -or -not (Test-Path -LiteralPath $CoreScriptPath -PathType Leaf)) {
+        throw 'Core script path does not exist.'
+    }
+
+    $progressQueue = New-Object 'System.Collections.Concurrent.ConcurrentQueue[string]'
+    $runspace = [System.Management.Automation.Runspaces.RunspaceFactory]::CreateRunspace()
+    $runspace.ApartmentState = [System.Threading.ApartmentState]::MTA
+    $runspace.ThreadOptions = [System.Management.Automation.Runspaces.PSThreadOptions]::ReuseThread
+    $runspace.Open()
+
+    $powershell = [System.Management.Automation.PowerShell]::Create()
+    $powershell.Runspace = $runspace
+
+    $scriptText = @'
+param($CoreScriptPath, $ScanArguments, $ProgressQueue)
+
+try {
+    . $CoreScriptPath
+
+    $progressCallback = {
+        param($Message)
+        $ProgressQueue.Enqueue([string] $Message)
+    }
+
+    Invoke-DupliViewScanOperation -Arguments $ScanArguments -ProgressCallback $progressCallback
+}
+catch {
+    [pscustomobject] @{
+        Success = $false
+        Error = $_.Exception.Message
+    }
+}
+'@
+
+    [void] $powershell.AddScript($scriptText)
+    [void] $powershell.AddArgument($CoreScriptPath)
+    [void] $powershell.AddArgument($Arguments)
+    [void] $powershell.AddArgument($progressQueue)
+
+    try {
+        $asyncResult = $powershell.BeginInvoke()
+    }
+    catch {
+        $powershell.Dispose()
+        $runspace.Close()
+        $runspace.Dispose()
+        throw
+    }
+
+    return [pscustomobject] @{
+        PowerShell = $powershell
+        Runspace = $runspace
+        AsyncResult = $asyncResult
+        ProgressQueue = $progressQueue
+    }
+}
+
+function Receive-DupliViewAsyncScanProgress {
+    param(
+        [Parameter(Mandatory = $true)]
+        $ScanOperation
+    )
+
+    $messages = New-Object System.Collections.ArrayList
+    $message = $null
+
+    while ($ScanOperation.ProgressQueue.TryDequeue([ref] $message)) {
+        [void] $messages.Add([string] $message)
+        $message = $null
+    }
+
+    return $messages
+}
+
+function Read-DupliViewAsyncScanUpdate {
+    param(
+        [Parameter(Mandatory = $true)]
+        $ScanOperation
+    )
+
+    $messages = @(
+        Receive-DupliViewAsyncScanProgress -ScanOperation $ScanOperation
+    )
+    $isCompleted = $false
+    $result = $null
+
+    if ($ScanOperation.AsyncResult.IsCompleted) {
+        $isCompleted = $true
+        $result = Complete-DupliViewAsyncScan -ScanOperation $ScanOperation
+    }
+
+    return [pscustomobject] @{
+        Messages = $messages
+        IsCompleted = $isCompleted
+        Result = $result
+    }
+}
+
+function Stop-DupliViewAsyncScan {
+    param(
+        $ScanOperation
+    )
+
+    if (-not $ScanOperation) {
+        return
+    }
+
+    if ($ScanOperation.PowerShell) {
+        if ($ScanOperation.AsyncResult -and -not $ScanOperation.AsyncResult.IsCompleted) {
+            try {
+                $ScanOperation.PowerShell.Stop()
+            }
+            catch {
+            }
+        }
+
+        try {
+            $ScanOperation.PowerShell.Dispose()
+        }
+        catch {
+        }
+    }
+
+    if ($ScanOperation.Runspace) {
+        try {
+            $ScanOperation.Runspace.Close()
+        }
+        catch {
+        }
+
+        try {
+            $ScanOperation.Runspace.Dispose()
+        }
+        catch {
+        }
+    }
+}
+
+function Complete-DupliViewAsyncScan {
+    param(
+        [Parameter(Mandatory = $true)]
+        $ScanOperation
+    )
+
+    try {
+        $results = $ScanOperation.PowerShell.EndInvoke($ScanOperation.AsyncResult)
+        if ($results.Count -eq 0) {
+            throw 'The async scan did not return a result.'
+        }
+
+        return $results[0]
+    }
+    finally {
+        Stop-DupliViewAsyncScan -ScanOperation $ScanOperation
     }
 }
 
