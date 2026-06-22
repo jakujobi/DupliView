@@ -15,7 +15,10 @@ For setup and basic requirements, see the README.
 1. Open DupliView.
 2. Click `Add Folder`.
 3. Choose `C:\Users\Example\Documents\TestDuplicates`.
-4. Check `Report destination` and make sure the report will be saved somewhere you can find.
+4. Check `Report destination`.
+   You can keep the default `Reports` folder or choose a different export folder.
+   DupliView creates the default `Reports` folder when the scan starts.
+   If the DupliView folder is read-only, click `Choose Folder` and pick a writable place you can find later.
 5. In `Scan options`, leave `Minimum size (MB)` at the value you want for this first test.
 6. Leave `Skip empty files` checked if you do not want zero-byte files included.
 7. Check `Create error CSV` only if you want a separate report for files DupliView could not read.

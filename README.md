@@ -10,6 +10,10 @@ DupliView is report-only. It never deletes, moves, renames, overwrites, uploads,
 
 The refreshed window keeps scan locations, report destination, scan options, scan status, and the live log on one screen.
 
+![DupliView main window](docs/images/dupliview-main-window.png)
+
+More screenshots are in [DupliView screenshots](docs/SCREENSHOTS.md).
+
 ## Safety Guarantee
 
 DupliView is intentionally limited to reporting. During a scan, it reads file metadata and file contents needed to compute hashes, then writes CSV reports to the selected export folder.
@@ -33,6 +37,7 @@ The app also avoids "open folder" shortcuts that launch other programs. When a s
 - Runs through a `.cmd` or `.bat` launcher.
 - Clean Windows Forms interface with one main screen.
 - Supports folders, drives, mapped drives such as `L:\`, and UNC paths such as `\\server\share`.
+- Keeps one scan-location entry when the same folder is added again with different trailing slashes.
 - Live status for current phase, readable files, skipped files, duplicate groups, and final report path.
 - Live log that shows each scan step.
 - Scan options for minimum file size, empty-file handling, and optional error CSV output.
@@ -46,9 +51,35 @@ The app also avoids "open folder" shortcuts that launch other programs. When a s
 
 - Windows 10 or Windows 11.
 - Windows PowerShell 5.1 or newer.
+- Built-in .NET Framework desktop components used by Windows Forms and System.Drawing.
 - Read access to the folders being scanned.
 - Write access to the selected export folder.
 - No administrator rights required.
+- No internet connection required for normal use.
+
+## Dependencies
+
+Normal users do not need to install app dependencies. DupliView uses Windows components that are already present on normal Windows 10/11 desktop systems:
+
+- `powershell.exe` for running the script.
+- Windows Forms and System.Drawing for the desktop window.
+- PowerShell file and CSV commands such as `Get-FileHash` and `Export-Csv`.
+
+Optional:
+
+- Excel, LibreOffice, or another spreadsheet app to open CSV reports. A text editor also works.
+
+Developer-only:
+
+- Pester 4.10.1 for tests.
+- `Compress-Archive` and `Get-FileHash` for building release ZIPs with `tools\New-ReleasePackage.ps1`.
+
+Places to watch:
+
+- Windows Server Core or locked-down kiosk images may not have the desktop UI components needed for Windows Forms.
+- Some managed work computers block PowerShell launchers, even safe local scripts.
+- If a ZIP is downloaded from the internet, Windows or security software may mark it as untrusted until IT reviews it.
+- Network-share scans depend on the user's normal Windows read permissions for that share.
 
 ## How To Run
 
@@ -71,12 +102,16 @@ powershell.exe -NoProfile -STA -ExecutionPolicy Bypass -File "%~dp0DupliView.ps1
 1. Click `Add Folder`.
 2. Choose one or more folders or drives.
 3. Use `Add Manual Path` for mapped drives or UNC paths.
-4. Choose an existing export folder if you do not want to use the default `Reports` folder.
+   If you add the same location again with a trailing-slash difference, DupliView keeps one entry.
+4. Keep the default `Reports` folder or choose an existing export folder.
+   DupliView creates the default `Reports` folder when the scan starts. If the DupliView folder is read-only, click `Choose Folder` and pick another writable location.
 5. Adjust scan options if needed.
 6. Click `Start Scan`.
 7. Watch the scan status and live log.
-8. Use `Copy Report Path` if you need to paste the report location elsewhere.
-9. Open the saved CSV report in Excel.
+8. Use `Cancel Scan` if you need to stop a long scan before it finishes.
+   The status changes to `Stopped`; rerun the scan later if you need a complete report.
+9. Use `Copy Report Path` if you need to paste the report location elsewhere.
+10. Open the saved CSV report in Excel.
 
 ## Scan Options
 
@@ -115,14 +150,14 @@ Review duplicate groups manually. DupliView does not decide which file to keep a
 - `FolderPath`: Folder containing the file.
 - `FullPath`: Full path to the file.
 - `SizeBytes`: File size in bytes.
-- `SizeMB`: File size in MB, rounded to 2 decimal places.
+- `SizeMiB`: File size in mebibytes, rounded to 2 decimal places.
 - `Hash`: SHA-256 content hash by default.
 - `LastModified`: Last write time reported by Windows.
 - `ExportedAt`: Date and time the report rows were created.
 
 ## Configuration
 
-Version 1 keeps defaults inside `DupliView.ps1` near the top:
+The current script keeps defaults inside `DupliView.ps1` near the top:
 
 ```powershell
 $MinimumSizeMB = 0
@@ -169,7 +204,8 @@ The current test suite is written for Windows PowerShell 5.1 and Pester 4.10.1. 
 Run tests from the repository root:
 
 ```powershell
-Invoke-Pester -Script .\tests\DupliView.Tests.ps1
+Import-Module Pester -RequiredVersion 4.10.1 -Force
+Invoke-Pester -Script .\tests\DupliView.Tests.ps1 -EnableExit
 ```
 
 If Pester is not installed, install it for development only:
@@ -183,6 +219,16 @@ The test suite creates temporary folders and files under the system temp directo
 Before changing the GUI or docs, run the tests and check that the safety scan still passes.
 
 GitHub Actions also runs the Pester suite on Windows for pushes and pull requests.
+
+## Create A Release ZIP
+
+Maintainers can build the release ZIP from a clean checkout:
+
+```powershell
+.\tools\New-ReleasePackage.ps1 -Version 0.2.0
+```
+
+The script writes `dist\DupliView-0.2.0.zip` and `dist\DupliView-0.2.0.zip.sha256`. The ZIP is source-inclusive: it includes the user-facing files, source, tests, maintainer docs, screenshots, packaging script, and `Reports\.gitkeep`; it does not include generated CSV reports, old ZIPs, `.git`, or local temp files. Normal users can ignore the developer files and start with `START HERE.txt`.
 
 ## License
 

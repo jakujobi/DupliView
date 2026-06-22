@@ -27,7 +27,10 @@ They should not need admin rights for a normal report-only scan of folders their
 
 1. Open DupliView.
 2. Click `Add Folder` for a normal folder, or `Add Manual Path` for a path such as `L:\` or `\\server\share`.
+   If they add the same location again with a trailing-slash difference, DupliView keeps one entry.
 3. Check `Report destination`.
+   They can keep the default `Reports` folder or choose another writable folder.
+   If the DupliView folder is read-only, they should click `Choose Folder` before starting the scan.
 4. Review `Scan options`.
 5. Set `Minimum size (MB)` if needed.
 6. Choose whether `Skip empty files` should be checked.

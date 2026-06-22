@@ -11,13 +11,16 @@ DupliView is report-only. It reads selected folders and writes CSV reports. It d
 - [Read The CSV](guides/read-the-csv.md): understand duplicate groups in Excel.
 - [Skipped Files And Errors](guides/skipped-files-and-errors.md): understand skipped files and optional error CSVs.
 - [Share With Coworkers](guides/share-with-coworkers.md): send DupliView to someone else and explain the basics.
-- [Troubleshooting](guides/troubleshooting.md): handle startup problems, antivirus blocks, and long scans.
+- [Troubleshooting](guides/troubleshooting.md): handle startup problems, read-only report destinations, antivirus blocks, and long scans.
 
 ## Project docs
 
-- [Release Checklist](RELEASE_CHECKLIST.md): checks before publishing a ZIP.
+- [Release Checklist](developer_docs/RELEASE_CHECKLIST.md): checks before publishing a ZIP.
+- [Release Process](developer_docs/RELEASE_PROCESS.md): exact maintainer steps for test, package, verify, and publish.
+- [Checksum Verification](developer_docs/CHECKSUM_VERIFICATION.md): how to verify a release ZIP hash.
 - [Screenshots](SCREENSHOTS.md): a short description of the current Windows interface.
 - [Contributing](../CONTRIBUTING.md): safety rules and development notes.
+- [Release Packaging Script](../tools/New-ReleasePackage.ps1): creates the release ZIP and SHA-256 checksum.
 
 ## Safety reminder
 

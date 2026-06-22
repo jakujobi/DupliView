@@ -24,6 +24,16 @@ Skipped files are not included in duplicate matching for that scan.
 
 The error CSV is useful when you need to explain why a location had unreadable files. It can also help IT understand whether your Windows account needs read access to a folder such as `L:\` or `\\server\share`.
 
+The error CSV columns are:
+
+`Time`: date and time DupliView recorded the error.
+
+`Stage`: scan step where the error happened.
+
+`Path`: file or folder path involved.
+
+`Error`: error message returned by Windows or DupliView.
+
 ## Check The Status During A Scan
 
 `Phase` shows what DupliView is doing.

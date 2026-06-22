@@ -13,7 +13,7 @@ DupliView is report-only. Pull requests must not add:
 - File content edits.
 - Cleanup modes.
 - Quarantine or recycle-bin workflows.
-- Uploads, telemetry, or network calls.
+- Uploads, telemetry, or network behavior outside user-selected file shares.
 - Installers, compiled executables, services, scheduled tasks, or registry edits.
 - Administrator requirements.
 
@@ -36,7 +36,8 @@ Normal users do not need Pester. Contributors use Pester for tests. Use Windows 
 Run tests from the repository root:
 
 ```powershell
-Invoke-Pester -Script .\tests\DupliView.Tests.ps1
+Import-Module Pester -RequiredVersion 4.10.1 -Force
+Invoke-Pester -Script .\tests\DupliView.Tests.ps1 -EnableExit
 ```
 
 If Pester is missing:
@@ -47,13 +48,24 @@ Install-Module Pester -RequiredVersion 4.10.1 -Scope CurrentUser
 
 Do not add production dependencies for normal users.
 
+## Release Packaging
+
+Build release ZIPs with the packaging script instead of selecting files by hand:
+
+```powershell
+.\tools\New-ReleasePackage.ps1 -Version 0.2.0
+```
+
+The script creates a ZIP and SHA-256 checksum under `dist\` while excluding generated reports, prior ZIPs, `.git`, and local temp files.
+
 ## Code Style
 
 - Use simple PowerShell that works on Windows PowerShell 5.1.
 - Keep scan logic testable outside the GUI.
 - Prefer clear function names over clever code.
 - Add comments only where they explain safety or non-obvious behavior.
-- Keep writes limited to the default `Reports` folder and selected report output files.
+- Keep writes limited to the lazily created default `Reports` folder and selected report output files.
+- Do not require the DupliView folder to be writable before a user starts a scan.
 
 ## Documentation Style
 
@@ -73,4 +85,4 @@ Before opening a pull request:
 4. Update README or guides if labels or behavior changed.
 5. Confirm generated CSV files are not committed.
 
-Pull requests that add cleanup, deletion, telemetry, network behavior, installers, services, scheduled tasks, registry changes, or admin-only behavior will be rejected.
+Pull requests that add cleanup, deletion, telemetry, uploads, network behavior outside user-selected file shares, installers, services, scheduled tasks, registry changes, or admin-only behavior will be rejected.

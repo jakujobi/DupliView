@@ -13,15 +13,26 @@ Common causes:
 - Windows blocked the PowerShell script because the folder came from a downloaded ZIP.
 - Antivirus or endpoint security blocked the PowerShell command line.
 - The DupliView folder was copied without all project files.
-- The user account cannot read the selected folder or write to the report folder.
+- The user account cannot read the DupliView folder or one of its required files.
 
 Do not disable antivirus to run DupliView. If a work computer blocks PowerShell scripts, ask IT to review the DupliView folder and the source files.
+
+## The scan will not start because the report folder is not writable
+
+If the DupliView folder is read-only, the window can still open. DupliView tries to create the default `Reports` folder only when the scan starts.
+
+If the live log or warning says DupliView could not create the default `Reports` folder:
+
+1. Click `Choose Folder`.
+2. Pick another writable folder for the report.
+3. Click `Start Scan` again.
+4. If a custom export folder also fails, check that your Windows account can write there.
 
 ## Antivirus reports suspicious PowerShell activity
 
 Some security tools treat PowerShell launchers cautiously, especially when a command starts a script from a `.cmd` or `.bat` file. DupliView uses PowerShell because it is a no-install Windows script, not because it needs admin access.
 
-The production app does not make network calls, upload files, create services, edit the registry, or change scanned files. The launchers only start `DupliView.ps1`.
+The production app does not make internet calls, upload files, create services, edit the registry, or change scanned files. If you choose a UNC or mapped-drive location, Windows file sharing is used only to read the selected files for the report-only scan. The launchers only start `DupliView.ps1`.
 
 If security software blocks the app:
 
@@ -42,6 +53,8 @@ Check:
 - `Live log` for the latest scan message.
 
 For a first test, scan a small folder before scanning a full shared drive.
+
+If you need to stop waiting, click `Cancel Scan`. DupliView stops the active scan and changes `Phase` to `Stopped`. A cancelled scan is not a complete report; start the scan again later if you still need the results.
 
 ## The CSV is empty
 
