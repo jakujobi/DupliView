@@ -281,7 +281,7 @@ Describe 'DupliView core duplicate detection' {
         $result.SkippedErrorItemCount | Should Be 1
     }
 
-    It 'emits live status and per-file hashing progress messages' {
+    It 'emits throttled hashing progress and live status messages' {
         New-TestFile -Path (Join-Path $script:TestRoot 'A\same1.txt') -Content 'hello duplicate'
         New-TestFile -Path (Join-Path $script:TestRoot 'B\same2.txt') -Content 'hello duplicate'
         New-TestFile -Path (Join-Path $script:TestRoot 'C\same3.txt') -Content 'hello duplicate'
@@ -294,12 +294,43 @@ Describe 'DupliView core duplicate detection' {
 
         Get-DupliViewDuplicateRecords -ScanLocations @($script:TestRoot) -MinimumSizeBytes 0 -SkipEmptyFiles $true -HashAlgorithm 'SHA256' -ProgressCallback $progressCallback | Out-Null
 
-        ($messages -contains 'Hashed 1 of 3 files.') | Should Be $true
-        ($messages -contains 'Hashed 3 of 3 files.') | Should Be $true
+        ($messages -contains 'Hashing progress: processed 1 of 3 files; hashed 1.') | Should Be $true
+        ($messages -contains 'Hashing progress: processed 3 of 3 files; hashed 3.') | Should Be $true
         ($messages -contains 'Readable files: 3.') | Should Be $true
         ($messages -contains 'Skipped files: 0.') | Should Be $true
         ($messages -contains 'Duplicate groups: 1.') | Should Be $true
         @($messages | Where-Object { $_ -like 'Skipped unreadable*' }).Count | Should Be 0
+    }
+
+    It 'does not count failed hashes as hashed progress' {
+        $badPath = Join-Path $script:TestRoot 'A\bad.txt'
+        $goodPath1 = Join-Path $script:TestRoot 'A\good1.txt'
+        $goodPath2 = Join-Path $script:TestRoot 'B\good2.txt'
+
+        New-TestFile -Path $badPath -Content 'same-size-data'
+        New-TestFile -Path $goodPath1 -Content 'good duplicate'
+        New-TestFile -Path $goodPath2 -Content 'good duplicate'
+
+        $hashScript = {
+            param($Path, $Algorithm)
+            if ($Path -eq $badPath) {
+                throw 'simulated read failure'
+            }
+            Get-FileHash -LiteralPath $Path -Algorithm $Algorithm
+        }
+
+        $messages = New-Object System.Collections.ArrayList
+        $progressCallback = {
+            param($Message)
+            [void] $messages.Add($Message)
+        }
+
+        Get-DupliViewDuplicateRecords -ScanLocations @($script:TestRoot) -MinimumSizeBytes 0 -SkipEmptyFiles $true -HashAlgorithm 'SHA256' -HashFileScriptBlock $hashScript -ProgressCallback $progressCallback | Out-Null
+
+        @($messages | Where-Object { $_ -eq 'Hashing progress: processed 3 of 3 files; hashed 3.' }).Count | Should Be 0
+        @($messages | Where-Object { $_ -like 'Hashing progress:*skipped failed hash.' }).Count | Should Be 1
+        ($messages -contains 'Readable files: 2.') | Should Be $true
+        ($messages -contains 'Skipped files: 1.') | Should Be $true
     }
 }
 
@@ -452,6 +483,16 @@ Describe 'DupliView path normalization and export folder handling' {
         $result | Should Be (Convert-Path -LiteralPath $defaultFolder)
     }
 
+    It 'creates the default export folder when its path contains wildcard characters' {
+        $defaultFolder = Join-Path $script:TestRoot 'Reports[2026]'
+
+        (Test-Path -LiteralPath $defaultFolder -PathType Container) | Should Be $false
+        $result = Ensure-DupliViewExportFolder -ExportFolder $defaultFolder -DefaultExportFolder $defaultFolder
+
+        (Test-Path -LiteralPath $defaultFolder -PathType Container) | Should Be $true
+        $result | Should Be (Convert-Path -LiteralPath $defaultFolder)
+    }
+
     It 'rejects a missing non-default export folder' {
         $missingFolder = Join-Path $script:TestRoot 'MissingReports'
         $threw = $false
@@ -468,10 +509,7 @@ Describe 'DupliView path normalization and export folder handling' {
     }
 
     It 'surfaces a clear message when the default export folder cannot be created' {
-        $defaultFolder = Join-Path $script:TestRoot 'Reports'
-        Mock -CommandName New-Item -MockWith { throw 'access denied' } -ParameterFilter {
-            $ItemType -eq 'Directory' -and $Path -eq $defaultFolder
-        }
+        $defaultFolder = Join-Path $script:TestRoot 'Reports:Invalid'
 
         $threw = $false
         try {
@@ -855,7 +893,7 @@ Describe 'DupliView GUI refresh' {
     It 'resets status and clears the log before start validation can fail' {
         $startIndex = $script:GuiScriptContent.IndexOf('$startScanButton.Add_Click')
         $resetIndex = $script:GuiScriptContent.IndexOf('Reset-DupliViewStatus', $startIndex)
-        $validationIndex = $script:GuiScriptContent.IndexOf('$locationsList.Items.Count -eq 0')
+        $validationIndex = $script:GuiScriptContent.IndexOf('$locationsList.Items.Count -eq 0', $startIndex)
         $clearIndex = $script:GuiScriptContent.IndexOf('$logTextBox.Clear()', $startIndex)
 
         $resetIndex -ge 0 | Should Be $true
@@ -884,7 +922,7 @@ Describe 'DupliView documentation set' {
             'CONTRIBUTING.md',
             'START HERE.txt',
             'docs\README.md',
-            'docs\RELEASE_CHECKLIST.md',
+            'docs\developer_docs\RELEASE_CHECKLIST.md',
             'docs\SCREENSHOTS.md',
             'docs\guides\first-scan.md',
             'docs\guides\network-drive-scan.md',
@@ -919,7 +957,7 @@ Describe 'DupliView documentation set' {
     }
 
     It 'documents release and contribution safety checks' {
-        $releaseChecklist = [System.IO.File]::ReadAllText((Join-Path $ProjectRoot 'docs\RELEASE_CHECKLIST.md'))
+        $releaseChecklist = [System.IO.File]::ReadAllText((Join-Path $ProjectRoot 'docs\developer_docs\RELEASE_CHECKLIST.md'))
         $contributing = [System.IO.File]::ReadAllText((Join-Path $ProjectRoot 'CONTRIBUTING.md'))
 
         $releaseChecklist | Should Match 'Invoke-Pester'
@@ -973,8 +1011,9 @@ Describe 'DupliView release packaging' {
         foreach ($cleanupPath in $script:PackageDistCleanupPaths) {
             if ($cleanupPath -and (Test-Path -LiteralPath $cleanupPath)) {
                 $resolvedPath = [string] (Resolve-Path -LiteralPath $cleanupPath)
-                $distRoot = Join-Path $ProjectRoot 'dist'
-                if (-not $resolvedPath.StartsWith($distRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+                $distRoot = ([System.IO.Path]::GetFullPath((Join-Path $ProjectRoot 'dist'))).TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar) + [System.IO.Path]::DirectorySeparatorChar
+                $resolvedFullPath = [System.IO.Path]::GetFullPath($resolvedPath)
+                if (-not $resolvedFullPath.StartsWith($distRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
                     throw ('Refusing to remove package test output outside dist: {0}' -f $resolvedPath)
                 }
 

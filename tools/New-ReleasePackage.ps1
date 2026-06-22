@@ -34,7 +34,7 @@ $requiredFiles = @(
     'src\DupliView.Core.ps1',
     'tests\DupliView.Tests.ps1',
     'docs\README.md',
-    'docs\RELEASE_CHECKLIST.md',
+    'docs\developer_docs\RELEASE_CHECKLIST.md',
     'docs\SCREENSHOTS.md',
     'docs\guides\first-scan.md',
     'docs\guides\network-drive-scan.md',
