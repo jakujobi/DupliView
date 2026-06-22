@@ -2,12 +2,42 @@
 
 Use this checklist before publishing a DupliView ZIP.
 
+## 0.2.0 Release Status
+
+Status: release package built and locally verified on 2026-06-22.
+
+Artifacts:
+
+- `dist/DupliView-0.2.0.zip`
+- `dist/DupliView-0.2.0.zip.sha256`
+
+Completed checks:
+
+- [x] Version is documented as `0.2.0`.
+- [x] `CHANGELOG.md` has a dated `0.2.0 - 2026-06-22` entry.
+- [x] `README.md` matches the current GUI, dependencies, and first-run workflow.
+- [x] `START HERE.txt` tells users to extract the ZIP first and keep files together.
+- [x] Screenshots use sample paths only.
+- [x] Pester suite passes.
+- [x] Release ZIP was generated with `tools/New-ReleasePackage.ps1`.
+- [x] Release ZIP contents were inspected.
+- [x] `Reports/` contains only `.gitkeep`.
+- [x] `dist/` contains only the current `0.2.0` ZIP and checksum.
+- [x] Whitespace and line-ending checks are clean.
+
+Not completed by this local checklist:
+
+- [ ] Commit the release-ready changes.
+- [ ] Create a release tag, if this repository uses tags.
+- [ ] Upload or distribute the ZIP through the chosen release channel.
+
 ## Version Check
 
 - Confirm the version or release name. The current release candidate is `0.2.0`.
 - Update `CHANGELOG.md`.
 - Confirm `LICENSE` uses the correct copyright name.
 - Confirm `README.md` matches the current GUI.
+- Confirm `README.md` still lists normal-user, optional, and developer-only dependencies accurately.
 - Confirm `docs/SCREENSHOTS.md` screenshots match the current GUI.
 - Confirm screenshots use sample paths only and do not show private folders, client names, or personal data.
 

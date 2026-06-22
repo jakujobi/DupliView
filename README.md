@@ -51,9 +51,35 @@ The app also avoids "open folder" shortcuts that launch other programs. When a s
 
 - Windows 10 or Windows 11.
 - Windows PowerShell 5.1 or newer.
+- Built-in .NET Framework desktop components used by Windows Forms and System.Drawing.
 - Read access to the folders being scanned.
 - Write access to the selected export folder.
 - No administrator rights required.
+- No internet connection required for normal use.
+
+## Dependencies
+
+Normal users do not need to install app dependencies. DupliView uses Windows components that are already present on normal Windows 10/11 desktop systems:
+
+- `powershell.exe` for running the script.
+- Windows Forms and System.Drawing for the desktop window.
+- PowerShell file and CSV commands such as `Get-FileHash` and `Export-Csv`.
+
+Optional:
+
+- Excel, LibreOffice, or another spreadsheet app to open CSV reports. A text editor also works.
+
+Developer-only:
+
+- Pester 4.10.1 for tests.
+- `Compress-Archive` and `Get-FileHash` for building release ZIPs with `tools\New-ReleasePackage.ps1`.
+
+Places to watch:
+
+- Windows Server Core or locked-down kiosk images may not have the desktop UI components needed for Windows Forms.
+- Some managed work computers block PowerShell launchers, even safe local scripts.
+- If a ZIP is downloaded from the internet, Windows or security software may mark it as untrusted until IT reviews it.
+- Network-share scans depend on the user's normal Windows read permissions for that share.
 
 ## How To Run
 

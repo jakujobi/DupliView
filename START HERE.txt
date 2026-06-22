@@ -3,6 +3,8 @@ DupliView - Start Here
 DupliView is report-only.
 It never deletes, moves, renames, overwrites, uploads, or modifies scanned files.
 
+No install is needed on normal Windows 10 or Windows 11 desktop computers.
+
 1. If this came as a ZIP, extract the ZIP first.
 2. Keep the extracted DupliView files together in one folder.
 3. Open the extracted DupliView folder.
