@@ -15,6 +15,23 @@ function Invoke-DupliViewProgress {
     }
 }
 
+function Test-DupliViewShouldReportHashProgress {
+    param(
+        [int] $ProcessedCount,
+        [int] $TotalCount,
+        [switch] $HashFailed
+    )
+
+    if ($TotalCount -le 0 -or $ProcessedCount -le 0) {
+        return $false
+    }
+
+    return $HashFailed -or
+        $ProcessedCount -eq 1 -or
+        $ProcessedCount -eq $TotalCount -or
+        ($ProcessedCount % 100) -eq 0
+}
+
 function Get-DupliViewSafeFileNamePart {
     param(
         [Parameter(Mandatory = $true)]
@@ -186,7 +203,7 @@ function Ensure-DupliViewExportFolder {
     }
 
     try {
-        [void] (New-Item -ItemType Directory -Path $ExportFolder -Force -ErrorAction Stop)
+        [void] [System.IO.Directory]::CreateDirectory($ExportFolder)
         $createdExportFolder = [string] (Convert-Path -LiteralPath $ExportFolder)
         if (-not (Test-DupliViewFolderWritable -Folder $createdExportFolder)) {
             throw 'not writable'
@@ -417,9 +434,13 @@ function Get-DupliViewDuplicateRecords {
     }
 
     $hashCandidateCount = $matchingSizeFiles.Count
-    $hashedCandidateNumber = 0
+    $processedHashCandidateCount = 0
+    $successfulHashCandidateCount = 0
 
     foreach ($file in $matchingSizeFiles) {
+        $processedHashCandidateCount++
+        $hashFailed = $false
+
         try {
             $hashResult = & $HashFileScriptBlock $file.FullPath $HashAlgorithm
             $hash = Get-DupliViewHashText -HashResult $hashResult
@@ -438,14 +459,23 @@ function Get-DupliViewDuplicateRecords {
                 LastModified = $file.LastModified
                 Hash = $hash
             })
+
+            $successfulHashCandidateCount++
         }
         catch {
+            $hashFailed = $true
             $failedHashFileCount++
             [void] $errorRecords.Add((New-DupliViewErrorRecord -Stage 'Hashing' -Path $file.FullPath -Error $_.Exception.Message))
         }
 
-        $hashedCandidateNumber++
-        Invoke-DupliViewProgress -ProgressCallback $ProgressCallback -Message ('Hashed {0:N0} of {1:N0} files.' -f $hashedCandidateNumber, $hashCandidateCount)
+        if (Test-DupliViewShouldReportHashProgress -ProcessedCount $processedHashCandidateCount -TotalCount $hashCandidateCount -HashFailed:$hashFailed) {
+            if ($hashFailed) {
+                Invoke-DupliViewProgress -ProgressCallback $ProgressCallback -Message ('Hashing progress: processed {0:N0} of {1:N0} files; hashed {2:N0}; skipped failed hash.' -f $processedHashCandidateCount, $hashCandidateCount, $successfulHashCandidateCount)
+            }
+            else {
+                Invoke-DupliViewProgress -ProgressCallback $ProgressCallback -Message ('Hashing progress: processed {0:N0} of {1:N0} files; hashed {2:N0}.' -f $processedHashCandidateCount, $hashCandidateCount, $successfulHashCandidateCount)
+            }
+        }
     }
 
     $readableFileCount = $candidateResult.CandidateFileCount - $failedHashFileCount
@@ -585,7 +615,7 @@ function Start-DupliViewAsyncScan {
         throw 'Core script path does not exist.'
     }
 
-    $progressQueue = New-Object 'System.Collections.Concurrent.ConcurrentQueue[string]'
+    $progressQueue = [System.Collections.Concurrent.ConcurrentQueue[string]]::new()
     $runspace = [System.Management.Automation.Runspaces.RunspaceFactory]::CreateRunspace()
     $runspace.ApartmentState = [System.Threading.ApartmentState]::MTA
     $runspace.ThreadOptions = [System.Management.Automation.Runspaces.PSThreadOptions]::ReuseThread
@@ -645,10 +675,10 @@ function Receive-DupliViewAsyncScanProgress {
     )
 
     $messages = New-Object System.Collections.ArrayList
-    $message = $null
+    [string] $message = $null
 
     while ($ScanOperation.ProgressQueue.TryDequeue([ref] $message)) {
-        [void] $messages.Add([string] $message)
+        [void] $messages.Add($message)
         $message = $null
     }
 
