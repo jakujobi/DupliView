@@ -922,7 +922,9 @@ Describe 'DupliView documentation set' {
             'CONTRIBUTING.md',
             'START HERE.txt',
             'docs\README.md',
+            'docs\developer_docs\CHECKSUM_VERIFICATION.md',
             'docs\developer_docs\RELEASE_CHECKLIST.md',
+            'docs\developer_docs\RELEASE_PROCESS.md',
             'docs\SCREENSHOTS.md',
             'docs\guides\first-scan.md',
             'docs\guides\network-drive-scan.md',
@@ -963,6 +965,8 @@ Describe 'DupliView documentation set' {
         $releaseChecklist | Should Match 'Invoke-Pester'
         $releaseChecklist | Should Match 'New-ReleasePackage\.ps1 -Version 0\.2\.0'
         $releaseChecklist | Should Match 'Reports/\*\.csv'
+        $releaseChecklist | Should Match 'CHECKSUM_VERIFICATION\.md'
+        $releaseChecklist | Should Match 'RELEASE_PROCESS\.md'
         $contributing | Should Match 'report-only'
         $contributing | Should Match 'New-ReleasePackage\.ps1 -Version 0\.2\.0'
         $contributing | Should Match 'Pull requests'
@@ -1050,6 +1054,8 @@ Describe 'DupliView release packaging' {
             ($entries -contains 'tools\New-ReleasePackage.ps1') | Should Be $true
             ($entries -contains 'src\DupliView.Core.ps1') | Should Be $true
             ($entries -contains 'tests\DupliView.Tests.ps1') | Should Be $true
+            ($entries -contains 'docs\developer_docs\CHECKSUM_VERIFICATION.md') | Should Be $true
+            ($entries -contains 'docs\developer_docs\RELEASE_PROCESS.md') | Should Be $true
             ($entries -contains 'docs\images\dupliview-main-window.png') | Should Be $true
             ($entries -contains 'docs\images\dupliview-completed-scan.png') | Should Be $true
             ($entries -contains 'Reports\.gitkeep') | Should Be $true

@@ -16,6 +16,8 @@ DupliView is report-only. It reads selected folders and writes CSV reports. It d
 ## Project docs
 
 - [Release Checklist](developer_docs/RELEASE_CHECKLIST.md): checks before publishing a ZIP.
+- [Release Process](developer_docs/RELEASE_PROCESS.md): exact maintainer steps for test, package, verify, and publish.
+- [Checksum Verification](developer_docs/CHECKSUM_VERIFICATION.md): how to verify a release ZIP hash.
 - [Screenshots](SCREENSHOTS.md): a short description of the current Windows interface.
 - [Contributing](../CONTRIBUTING.md): safety rules and development notes.
 - [Release Packaging Script](../tools/New-ReleasePackage.ps1): creates the release ZIP and SHA-256 checksum.

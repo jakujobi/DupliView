@@ -21,6 +21,8 @@ Completed checks:
 - [x] Pester suite passes.
 - [x] Release ZIP was generated with `tools/New-ReleasePackage.ps1`.
 - [x] Release ZIP contents were inspected.
+- [x] Checksum verification instructions are documented.
+- [x] Release process instructions are documented.
 - [x] `Reports/` contains only `.gitkeep`.
 - [x] `dist/` contains only the current `0.2.0` ZIP and checksum.
 - [x] Whitespace and line-ending checks are clean.
@@ -123,6 +125,8 @@ The ZIP should include:
 - `src/`
 - `tests/`
 - `docs/`
+- `docs/developer_docs/CHECKSUM_VERIFICATION.md`
+- `docs/developer_docs/RELEASE_PROCESS.md`
 - `Reports/.gitkeep`
 
 For a coworker ZIP, keep `START HERE.txt`, the launchers, `DupliView.ps1`, `src/`, `Reports/`, and the main safety docs easy to see at the top level.

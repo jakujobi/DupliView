@@ -8,6 +8,11 @@
 - Added scan cancellation from the GUI.
 - Added current GUI screenshots to the README and documentation set.
 - Added a repeatable release packaging script that creates a ZIP and SHA-256 checksum.
+- Added maintainer docs for checksum verification and the release process.
+- Hardened async scan progress queue handling for Windows PowerShell 5.1.
+- Hardened default report-folder creation for paths with wildcard characters.
+- Throttled hash progress logging and stopped counting failed hashes as successfully hashed.
+- Hardened release packaging tests around cleanup path boundaries.
 - Fixed stale status/log behavior after failed scan-start validation.
 - Fixed invalid hash algorithm handling so configuration errors fail the scan.
 - Fixed duplicate grouping to keep file sizes separate even if hashes collide.
