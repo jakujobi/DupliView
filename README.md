@@ -10,6 +10,10 @@ DupliView is report-only. It never deletes, moves, renames, overwrites, uploads,
 
 The refreshed window keeps scan locations, report destination, scan options, scan status, and the live log on one screen.
 
+![DupliView main window](docs/images/dupliview-main-window.png)
+
+More screenshots are in [DupliView screenshots](docs/SCREENSHOTS.md).
+
 ## Safety Guarantee
 
 DupliView is intentionally limited to reporting. During a scan, it reads file metadata and file contents needed to compute hashes, then writes CSV reports to the selected export folder.
@@ -78,8 +82,10 @@ powershell.exe -NoProfile -STA -ExecutionPolicy Bypass -File "%~dp0DupliView.ps1
 5. Adjust scan options if needed.
 6. Click `Start Scan`.
 7. Watch the scan status and live log.
-8. Use `Copy Report Path` if you need to paste the report location elsewhere.
-9. Open the saved CSV report in Excel.
+8. Use `Cancel Scan` if you need to stop a long scan before it finishes.
+   The status changes to `Stopped`; rerun the scan later if you need a complete report.
+9. Use `Copy Report Path` if you need to paste the report location elsewhere.
+10. Open the saved CSV report in Excel.
 
 ## Scan Options
 
@@ -118,14 +124,14 @@ Review duplicate groups manually. DupliView does not decide which file to keep a
 - `FolderPath`: Folder containing the file.
 - `FullPath`: Full path to the file.
 - `SizeBytes`: File size in bytes.
-- `SizeMB`: File size in MB, rounded to 2 decimal places.
+- `SizeMiB`: File size in mebibytes, rounded to 2 decimal places.
 - `Hash`: SHA-256 content hash by default.
 - `LastModified`: Last write time reported by Windows.
 - `ExportedAt`: Date and time the report rows were created.
 
 ## Configuration
 
-Version 1 keeps defaults inside `DupliView.ps1` near the top:
+The current script keeps defaults inside `DupliView.ps1` near the top:
 
 ```powershell
 $MinimumSizeMB = 0
@@ -172,7 +178,8 @@ The current test suite is written for Windows PowerShell 5.1 and Pester 4.10.1. 
 Run tests from the repository root:
 
 ```powershell
-Invoke-Pester -Script .\tests\DupliView.Tests.ps1
+Import-Module Pester -RequiredVersion 4.10.1 -Force
+Invoke-Pester -Script .\tests\DupliView.Tests.ps1 -EnableExit
 ```
 
 If Pester is not installed, install it for development only:
@@ -186,6 +193,16 @@ The test suite creates temporary folders and files under the system temp directo
 Before changing the GUI or docs, run the tests and check that the safety scan still passes.
 
 GitHub Actions also runs the Pester suite on Windows for pushes and pull requests.
+
+## Create A Release ZIP
+
+Maintainers can build the release ZIP from a clean checkout:
+
+```powershell
+.\tools\New-ReleasePackage.ps1 -Version 0.2.0
+```
+
+The script writes `dist\DupliView-0.2.0.zip` and `dist\DupliView-0.2.0.zip.sha256`. The ZIP is source-inclusive: it includes the user-facing files, source, tests, maintainer docs, screenshots, packaging script, and `Reports\.gitkeep`; it does not include generated CSV reports, old ZIPs, `.git`, or local temp files. Normal users can ignore the developer files and start with `START HERE.txt`.
 
 ## License
 

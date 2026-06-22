@@ -43,6 +43,8 @@ Watch `Phase` and `Live log` to see whether DupliView is collecting files, group
 
 `Readable files` and `Skipped` can help explain the final count. Some files may be locked by another program or hidden from your account. If many expected files are skipped, ask IT whether your Windows account has read access to that location.
 
+If you need to stop a long scan, click `Cancel Scan`. DupliView stops the active scan, changes `Phase` to `Stopped`, and leaves scanned files unchanged. Start a new scan later if you need a complete report.
+
 ## What This Does Not Do
 
 This guide does not change shared-drive contents, permissions, or Windows drive setup. It only explains how to include a mapped drive or shared path in a report-only scan.

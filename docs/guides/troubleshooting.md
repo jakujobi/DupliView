@@ -32,7 +32,7 @@ If the live log or warning says DupliView could not create the default `Reports`
 
 Some security tools treat PowerShell launchers cautiously, especially when a command starts a script from a `.cmd` or `.bat` file. DupliView uses PowerShell because it is a no-install Windows script, not because it needs admin access.
 
-The production app does not make network calls, upload files, create services, edit the registry, or change scanned files. The launchers only start `DupliView.ps1`.
+The production app does not make internet calls, upload files, create services, edit the registry, or change scanned files. If you choose a UNC or mapped-drive location, Windows file sharing is used only to read the selected files for the report-only scan. The launchers only start `DupliView.ps1`.
 
 If security software blocks the app:
 
@@ -53,6 +53,8 @@ Check:
 - `Live log` for the latest scan message.
 
 For a first test, scan a small folder before scanning a full shared drive.
+
+If you need to stop waiting, click `Cancel Scan`. DupliView stops the active scan and changes `Phase` to `Stopped`. A cancelled scan is not a complete report; start the scan again later if you still need the results.
 
 ## The CSV is empty
 

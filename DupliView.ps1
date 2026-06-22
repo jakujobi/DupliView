@@ -28,7 +28,7 @@ $CsvColumns = @(
     'FolderPath',
     'FullPath',
     'SizeBytes',
-    'SizeMB',
+    'SizeMiB',
     'Hash',
     'LastModified',
     'ExportedAt'
@@ -306,8 +306,9 @@ function Set-DupliViewScanControlsEnabled {
     $skipEmptyFilesCheckBox.Enabled = $Enabled
     $createErrorCsvCheckBox.Enabled = $Enabled
     $startScanButton.Enabled = $Enabled
+    $cancelScanButton.Enabled = -not $Enabled
     $copyReportPathButton.Enabled = $Enabled -and -not [string]::IsNullOrWhiteSpace($reportPathTextBox.Text)
-    $closeButton.Enabled = $Enabled
+    $closeButton.Enabled = $true
 }
 
 function Set-DupliViewPhase {
@@ -332,9 +333,9 @@ function Complete-DupliViewStatus {
     )
 
     $scanResult = $WorkerResult.ScanResult
-    $skippedCount = $scanResult.SkippedUnreadableItemCount + $scanResult.SkippedEmptyFileCount + $scanResult.SkippedMinimumSizeFileCount
+    $skippedCount = $scanResult.SkippedErrorItemCount + $scanResult.SkippedEmptyFileCount + $scanResult.SkippedMinimumSizeFileCount
     $phaseValueLabel.Text = 'Done'
-    $readableValueLabel.Text = ('{0:N0}' -f $scanResult.CandidateFileCount)
+    $readableValueLabel.Text = ('{0:N0}' -f $scanResult.ReadableFileCount)
     $skippedValueLabel.Text = ('{0:N0}' -f $skippedCount)
     $duplicatesValueLabel.Text = ('{0:N0}' -f $scanResult.DuplicateGroupCount)
     $reportPathTextBox.Text = $WorkerResult.ReportPath
@@ -357,6 +358,27 @@ function Get-DupliViewPhaseFromMessage {
     return $null
 }
 
+function Update-DupliViewLiveStatusFromMessage {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Message
+    )
+
+    if ($Message -match '^Readable files:\s*([0-9,]+)\.') {
+        $readableValueLabel.Text = $Matches[1]
+        return
+    }
+
+    if ($Message -match '^Skipped files:\s*([0-9,]+)\.') {
+        $skippedValueLabel.Text = $Matches[1]
+        return
+    }
+
+    if ($Message -match '^Duplicate groups:\s*([0-9,]+)\.') {
+        $duplicatesValueLabel.Text = $Matches[1]
+    }
+}
+
 function Process-DupliViewScanMessage {
     param(
         [Parameter(Mandatory = $true)]
@@ -368,6 +390,7 @@ function Process-DupliViewScanMessage {
         Set-DupliViewPhase -Phase $phase
     }
 
+    Update-DupliViewLiveStatusFromMessage -Message $Message
     Add-DupliViewLogMessage -LogTextBox $logTextBox -Message $Message
 }
 
@@ -386,6 +409,26 @@ function Stop-DupliViewActiveScanOperation {
     if ($script:DupliViewScanOperation) {
         Stop-DupliViewAsyncScan -ScanOperation $script:DupliViewScanOperation
         $script:DupliViewScanOperation = $null
+    }
+}
+
+function Cancel-DupliViewActiveScan {
+    param(
+        [switch] $Quiet
+    )
+
+    if (-not $script:DupliViewScanRunning -and -not $script:DupliViewScanOperation) {
+        return
+    }
+
+    $scanProgressTimer.Stop()
+    Stop-DupliViewActiveScanOperation
+    $script:DupliViewScanRunning = $false
+    $phaseValueLabel.Text = 'Stopped'
+    Set-DupliViewScanControlsEnabled -Enabled $true
+
+    if (-not $Quiet) {
+        Add-DupliViewLogMessage -LogTextBox $logTextBox -Message 'Scan cancelled.'
     }
 }
 
@@ -662,8 +705,11 @@ $actionPanel.Padding = New-DupliViewPadding 0 7 0 0
 [void] $mainLayout.Controls.Add($actionPanel, 0, 5)
 
 $closeButton = New-DupliViewButton -Text 'Close' -Width 92
+$cancelScanButton = New-DupliViewButton -Text 'Cancel Scan' -Width 116
+$cancelScanButton.Enabled = $false
 $startScanButton = New-DupliViewButton -Text 'Start Scan' -Width 132 -Primary
 [void] $actionPanel.Controls.Add($closeButton)
+[void] $actionPanel.Controls.Add($cancelScanButton)
 [void] $actionPanel.Controls.Add($startScanButton)
 
 $scanProgressTimer.Add_Tick({
@@ -699,7 +745,12 @@ $addFolderButton.Add_Click({
     $folderDialog.ShowNewFolderButton = $false
 
     if ($folderDialog.ShowDialog($form) -eq [System.Windows.Forms.DialogResult]::OK) {
-        Add-DupliViewScanLocation -ListBox $locationsList -Path $folderDialog.SelectedPath
+        try {
+            Add-DupliViewScanLocation -ListBox $locationsList -Path $folderDialog.SelectedPath
+        }
+        catch {
+            [void] [System.Windows.Forms.MessageBox]::Show($form, ('That path could not be added: {0}' -f $_.Exception.Message), 'DupliView', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
+        }
     }
 
     $folderDialog.Dispose()
@@ -717,7 +768,12 @@ $addManualPathButton.Add_Click({
         return
     }
 
-    Add-DupliViewScanLocation -ListBox $locationsList -Path $manualPath
+    try {
+        Add-DupliViewScanLocation -ListBox $locationsList -Path $manualPath
+    }
+    catch {
+        [void] [System.Windows.Forms.MessageBox]::Show($form, ('That path could not be added: {0}' -f $_.Exception.Message), 'DupliView', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
+    }
 })
 
 $removeSelectedButton.Add_Click({
@@ -755,6 +811,9 @@ $startScanButton.Add_Click({
         return
     }
 
+    Reset-DupliViewStatus
+    $logTextBox.Clear()
+
     if ($locationsList.Items.Count -eq 0) {
         [void] [System.Windows.Forms.MessageBox]::Show($form, 'Add at least one folder, drive, or network path before starting a scan.', 'DupliView', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
         return
@@ -769,7 +828,14 @@ $startScanButton.Add_Click({
             return
         }
 
-        $normalizedPath = Normalize-DupliViewContainerPath -Path $path
+        try {
+            $normalizedPath = Normalize-DupliViewContainerPath -Path $path
+        }
+        catch {
+            [void] [System.Windows.Forms.MessageBox]::Show($form, ('This scan location could not be prepared: {0}' -f $_.Exception.Message), 'DupliView', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
+            return
+        }
+
         if ($seenScanLocations.ContainsKey($normalizedPath)) {
             continue
         }
@@ -790,8 +856,6 @@ $startScanButton.Add_Click({
         return
     }
 
-    Reset-DupliViewStatus
-    $logTextBox.Clear()
     $script:DupliViewScanRunning = $true
     Set-DupliViewScanControlsEnabled -Enabled $false
 
@@ -818,6 +882,10 @@ $startScanButton.Add_Click({
     }
 })
 
+$cancelScanButton.Add_Click({
+    Cancel-DupliViewActiveScan
+})
+
 $closeButton.Add_Click({
     $form.Close()
 })
@@ -826,8 +894,13 @@ $form.Add_FormClosing({
     param($Sender, $EventArgs)
 
     if ($script:DupliViewScanRunning) {
-        $EventArgs.Cancel = $true
-        [void] [System.Windows.Forms.MessageBox]::Show($form, 'A scan is running. Wait for it to finish before closing DupliView.', 'DupliView', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
+        $choice = [System.Windows.Forms.MessageBox]::Show($form, 'A scan is running. Cancel it and close DupliView?', 'DupliView', [System.Windows.Forms.MessageBoxButtons]::YesNo, [System.Windows.Forms.MessageBoxIcon]::Question)
+        if ($choice -ne [System.Windows.Forms.DialogResult]::Yes) {
+            $EventArgs.Cancel = $true
+            return
+        }
+
+        Cancel-DupliViewActiveScan -Quiet
     }
 })
 

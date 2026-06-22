@@ -2,6 +2,8 @@ if (-not $script:DupliViewCoreScriptPath) {
     $script:DupliViewCoreScriptPath = $PSCommandPath
 }
 
+$script:DupliViewSupportedHashAlgorithms = @('SHA1', 'SHA256', 'SHA384', 'SHA512', 'MD5')
+
 function Invoke-DupliViewProgress {
     param(
         [scriptblock] $ProgressCallback,
@@ -88,7 +90,26 @@ function Normalize-DupliViewContainerPath {
     )
 
     $trimmedPath = $Path.Trim()
-    $resolvedPath = [string] (Convert-Path -LiteralPath $trimmedPath)
+
+    if ($trimmedPath -match '^([A-Za-z]):$') {
+        $driveRoot = ('{0}:\' -f $Matches[1].ToUpperInvariant())
+        if (-not (Test-Path -LiteralPath $driveRoot -PathType Container)) {
+            throw 'Path does not exist or is not a folder.'
+        }
+
+        return $driveRoot
+    }
+
+    try {
+        $resolvedPath = [string] (Convert-Path -LiteralPath $trimmedPath -ErrorAction Stop)
+    }
+    catch {
+        throw 'Path does not exist or is not a folder.'
+    }
+
+    if ($resolvedPath -notmatch '^[A-Za-z]:\\' -and $resolvedPath -notmatch '^[\\/]{2}') {
+        throw 'Choose a file-system folder, drive, or network path.'
+    }
 
     if ($resolvedPath -match '^[A-Za-z]:\\$') {
         return $resolvedPath
@@ -101,6 +122,30 @@ function Normalize-DupliViewContainerPath {
     return $resolvedPath.TrimEnd([char[]] @('\', '/'))
 }
 
+function Test-DupliViewFolderWritable {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Folder
+    )
+
+    $probePath = Join-Path $Folder ('.dupliview_write_test_{0}.tmp' -f ([guid]::NewGuid().ToString('N')))
+    $stream = $null
+
+    try {
+        $stream = New-Object System.IO.FileStream -ArgumentList @($probePath, [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None, 4096, [System.IO.FileOptions]::DeleteOnClose)
+        return $true
+    }
+    catch {
+        return $false
+    }
+    finally {
+        if ($stream) {
+            $stream.Dispose()
+        }
+
+    }
+}
+
 function Ensure-DupliViewExportFolder {
     param(
         [Parameter(Mandatory = $true)]
@@ -111,7 +156,12 @@ function Ensure-DupliViewExportFolder {
     )
 
     if (Test-Path -LiteralPath $ExportFolder -PathType Container) {
-        return [string] (Convert-Path -LiteralPath $ExportFolder)
+        $resolvedExportFolder = [string] (Convert-Path -LiteralPath $ExportFolder)
+        if (-not (Test-DupliViewFolderWritable -Folder $resolvedExportFolder)) {
+            throw 'Export folder is not writable. Choose another export folder and try again.'
+        }
+
+        return $resolvedExportFolder
     }
 
     $comparisonExportFolder = $ExportFolder.Trim()
@@ -137,7 +187,12 @@ function Ensure-DupliViewExportFolder {
 
     try {
         [void] (New-Item -ItemType Directory -Path $ExportFolder -Force -ErrorAction Stop)
-        return [string] (Convert-Path -LiteralPath $ExportFolder)
+        $createdExportFolder = [string] (Convert-Path -LiteralPath $ExportFolder)
+        if (-not (Test-DupliViewFolderWritable -Folder $createdExportFolder)) {
+            throw 'not writable'
+        }
+
+        return $createdExportFolder
     }
     catch {
         throw 'The default Reports folder could not be created here. Choose another export folder and try again.'
@@ -310,6 +365,17 @@ function Get-DupliViewHashText {
     throw 'Hash command did not return a Hash value.'
 }
 
+function Assert-DupliViewHashAlgorithm {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $HashAlgorithm
+    )
+
+    if ($script:DupliViewSupportedHashAlgorithms -notcontains $HashAlgorithm.ToUpperInvariant()) {
+        throw ('Unsupported hash algorithm: {0}.' -f $HashAlgorithm)
+    }
+}
+
 function Get-DupliViewDuplicateRecords {
     param(
         [Parameter(Mandatory = $true)]
@@ -329,10 +395,12 @@ function Get-DupliViewDuplicateRecords {
         [scriptblock] $ProgressCallback
     )
 
+    Assert-DupliViewHashAlgorithm -HashAlgorithm $HashAlgorithm
+
     Invoke-DupliViewProgress -ProgressCallback $ProgressCallback -Message 'Step 2: Collecting files from selected locations...'
     $candidateResult = Get-DupliViewCandidateFiles -ScanLocations $ScanLocations -MinimumSizeBytes $MinimumSizeBytes -SkipEmptyFiles $SkipEmptyFiles
-    Invoke-DupliViewProgress -ProgressCallback $ProgressCallback -Message ('Found {0:N0} readable files.' -f $candidateResult.CandidateFileCount)
-    Invoke-DupliViewProgress -ProgressCallback $ProgressCallback -Message ('Skipped unreadable items: {0:N0}.' -f $candidateResult.ErrorRecords.Count)
+    Invoke-DupliViewProgress -ProgressCallback $ProgressCallback -Message ('Found {0:N0} files after size and empty-file filters.' -f $candidateResult.CandidateFileCount)
+    Invoke-DupliViewProgress -ProgressCallback $ProgressCallback -Message ('Scan errors before hashing: {0:N0}.' -f $candidateResult.ErrorRecords.Count)
 
     Invoke-DupliViewProgress -ProgressCallback $ProgressCallback -Message 'Step 3: Grouping files by size...'
     $sizeGroups = @($candidateResult.Files | Group-Object -Property SizeBytes | Where-Object { $_.Count -gt 1 })
@@ -342,10 +410,14 @@ function Get-DupliViewDuplicateRecords {
     Invoke-DupliViewProgress -ProgressCallback $ProgressCallback -Message 'Step 4: Hashing candidate files...'
     $hashRecords = New-Object System.Collections.ArrayList
     $errorRecords = New-Object System.Collections.ArrayList
+    $failedHashFileCount = 0
 
     foreach ($errorRecord in $candidateResult.ErrorRecords) {
         [void] $errorRecords.Add($errorRecord)
     }
+
+    $hashCandidateCount = $matchingSizeFiles.Count
+    $hashedCandidateNumber = 0
 
     foreach ($file in $matchingSizeFiles) {
         try {
@@ -368,18 +440,23 @@ function Get-DupliViewDuplicateRecords {
             })
         }
         catch {
+            $failedHashFileCount++
             [void] $errorRecords.Add((New-DupliViewErrorRecord -Stage 'Hashing' -Path $file.FullPath -Error $_.Exception.Message))
         }
+
+        $hashedCandidateNumber++
+        Invoke-DupliViewProgress -ProgressCallback $ProgressCallback -Message ('Hashed {0:N0} of {1:N0} files.' -f $hashedCandidateNumber, $hashCandidateCount)
     }
 
-    if ($errorRecords.Count -ne $candidateResult.ErrorRecords.Count) {
-        Invoke-DupliViewProgress -ProgressCallback $ProgressCallback -Message ('Skipped unreadable or failed-hash items: {0:N0}.' -f $errorRecords.Count)
-    }
+    $readableFileCount = $candidateResult.CandidateFileCount - $failedHashFileCount
+    $skippedFileCount = $errorRecords.Count + $candidateResult.SkippedEmptyFileCount + $candidateResult.SkippedMinimumSizeFileCount
+    Invoke-DupliViewProgress -ProgressCallback $ProgressCallback -Message ('Readable files: {0:N0}.' -f $readableFileCount)
+    Invoke-DupliViewProgress -ProgressCallback $ProgressCallback -Message ('Skipped files: {0:N0}.' -f $skippedFileCount)
 
     Invoke-DupliViewProgress -ProgressCallback $ProgressCallback -Message 'Step 5: Grouping files by hash...'
     $duplicateHashGroups = @(
         $hashRecords |
-            Group-Object -Property Hash |
+            Group-Object -Property SizeBytes, Hash |
             Where-Object { $_.Count -gt 1 } |
             Sort-Object @{ Expression = { [int64] $_.Group[0].SizeBytes }; Descending = $true }, Name
     )
@@ -404,7 +481,7 @@ function Get-DupliViewDuplicateRecords {
                 FolderPath = $file.FolderPath
                 FullPath = $file.FullPath
                 SizeBytes = $file.SizeBytes
-                SizeMB = [math]::Round(($file.SizeBytes / 1MB), 2)
+                SizeMiB = [math]::Round(($file.SizeBytes / 1MB), 2)
                 Hash = $file.Hash
                 LastModified = $file.LastModified
                 ExportedAt = $exportedAt
@@ -415,16 +492,20 @@ function Get-DupliViewDuplicateRecords {
     }
 
     Invoke-DupliViewProgress -ProgressCallback $ProgressCallback -Message ('Found {0:N0} duplicate groups.' -f $duplicateHashGroups.Count)
+    Invoke-DupliViewProgress -ProgressCallback $ProgressCallback -Message ('Duplicate groups: {0:N0}.' -f $duplicateHashGroups.Count)
 
     return [pscustomobject] @{
         DuplicateRecords = $duplicateRecords
         ErrorRecords = $errorRecords
         CandidateFileCount = $candidateResult.CandidateFileCount
+        ReadableFileCount = $readableFileCount
+        FailedHashFileCount = $failedHashFileCount
         SkippedEmptyFileCount = $candidateResult.SkippedEmptyFileCount
         SkippedMinimumSizeFileCount = $candidateResult.SkippedMinimumSizeFileCount
         MatchingSizeFileCount = $matchingSizeFiles.Count
         HashedFileCount = $hashRecords.Count
         DuplicateGroupCount = $duplicateHashGroups.Count
+        SkippedErrorItemCount = $errorRecords.Count
         SkippedUnreadableItemCount = $errorRecords.Count
     }
 }
@@ -436,6 +517,10 @@ function Invoke-DupliViewScanOperation {
 
         [scriptblock] $ProgressCallback
     )
+
+    $scanResult = $null
+    $reportPath = $null
+    $errorReportPath = $null
 
     try {
         Invoke-DupliViewProgress -ProgressCallback $ProgressCallback -Message 'Step 1: Preparing scan...'
@@ -454,7 +539,6 @@ function Invoke-DupliViewScanOperation {
         $reportFileName = New-DupliViewReportFileName -ScanLocations $Arguments.ScanLocations -Timestamp $timestamp
         $reportPath = Export-DupliViewDuplicateReport -Records $scanResult.DuplicateRecords -ExportFolder $Arguments.ExportFolder -FileName $reportFileName -CsvColumns $Arguments.CsvColumns
 
-        $errorReportPath = $null
         if ($Arguments.CreateErrorLog -and $scanResult.ErrorRecords.Count -gt 0) {
             $errorFileName = New-DupliViewReportFileName -ScanLocations $Arguments.ScanLocations -Timestamp $timestamp -ErrorReport
             $errorReportPath = Export-DupliViewErrorReport -ErrorRecords $scanResult.ErrorRecords -ExportFolder $Arguments.ExportFolder -FileName $errorFileName
@@ -468,10 +552,24 @@ function Invoke-DupliViewScanOperation {
         }
     }
     catch {
-        return [pscustomobject] @{
+        $failure = [ordered] @{
             Success = $false
             Error = $_.Exception.Message
         }
+
+        if ($scanResult) {
+            $failure.ScanResult = $scanResult
+        }
+
+        if (-not [string]::IsNullOrWhiteSpace($reportPath)) {
+            $failure.ReportPath = $reportPath
+        }
+
+        if (-not [string]::IsNullOrWhiteSpace($errorReportPath)) {
+            $failure.ErrorReportPath = $errorReportPath
+        }
+
+        return [pscustomobject] $failure
     }
 }
 
@@ -659,6 +757,10 @@ function Get-DupliViewAvailableReportPath {
         [string] $FileName
     )
 
+    if ([string]::IsNullOrWhiteSpace($FileName) -or $FileName -ne [System.IO.Path]::GetFileName($FileName)) {
+        throw 'Report filename must be a file name, not a path.'
+    }
+
     $initialPath = Join-Path $ExportFolder $FileName
 
     if (-not (Test-Path -LiteralPath $initialPath)) {
@@ -678,6 +780,38 @@ function Get-DupliViewAvailableReportPath {
     }
 
     throw 'Could not create a non-colliding report filename.'
+}
+
+function Write-DupliViewCsvLines {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Path,
+
+        [Parameter(Mandatory = $true)]
+        [string[]] $Lines
+    )
+
+    $encoding = New-Object System.Text.UTF8Encoding -ArgumentList $true
+    $stream = $null
+    $writer = $null
+
+    try {
+        $stream = New-Object System.IO.FileStream -ArgumentList @($Path, [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
+        $writer = New-Object System.IO.StreamWriter -ArgumentList @($stream, $encoding)
+        $stream = $null
+
+        foreach ($line in $Lines) {
+            $writer.WriteLine($line)
+        }
+    }
+    finally {
+        if ($writer) {
+            $writer.Dispose()
+        }
+        elseif ($stream) {
+            $stream.Dispose()
+        }
+    }
 }
 
 function Export-DupliViewDuplicateReport {
@@ -702,15 +836,15 @@ function Export-DupliViewDuplicateReport {
     $reportPath = Get-DupliViewAvailableReportPath -ExportFolder $ExportFolder -FileName $FileName
     $recordList = @($Records)
 
+    $lines = @()
     if ($recordList.Count -eq 0) {
-        $encoding = New-Object System.Text.UTF8Encoding -ArgumentList $true
-        [System.IO.File]::WriteAllLines($reportPath, [string[]] @(Get-DupliViewCsvHeaderLine -Columns $CsvColumns), $encoding)
+        $lines = [string[]] @(Get-DupliViewCsvHeaderLine -Columns $CsvColumns)
     }
     else {
-        $recordList |
-            Select-Object -Property $CsvColumns |
-            Export-Csv -LiteralPath $reportPath -NoTypeInformation -Encoding UTF8 -ErrorAction Stop
+        $lines = [string[]] @($recordList | Select-Object -Property $CsvColumns | ConvertTo-Csv -NoTypeInformation)
     }
+
+    Write-DupliViewCsvLines -Path $reportPath -Lines $lines
 
     return $reportPath
 }
@@ -735,15 +869,15 @@ function Export-DupliViewErrorReport {
     $columns = @('Time', 'Stage', 'Path', 'Error')
     $recordList = @($ErrorRecords)
 
+    $lines = @()
     if ($recordList.Count -eq 0) {
-        $encoding = New-Object System.Text.UTF8Encoding -ArgumentList $true
-        [System.IO.File]::WriteAllLines($reportPath, [string[]] @(Get-DupliViewCsvHeaderLine -Columns $columns), $encoding)
+        $lines = [string[]] @(Get-DupliViewCsvHeaderLine -Columns $columns)
     }
     else {
-        $recordList |
-            Select-Object -Property $columns |
-            Export-Csv -LiteralPath $reportPath -NoTypeInformation -Encoding UTF8 -ErrorAction Stop
+        $lines = [string[]] @($recordList | Select-Object -Property $columns | ConvertTo-Csv -NoTypeInformation)
     }
+
+    Write-DupliViewCsvLines -Path $reportPath -Lines $lines
 
     return $reportPath
 }

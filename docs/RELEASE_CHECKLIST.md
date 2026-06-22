@@ -4,10 +4,12 @@ Use this checklist before publishing a DupliView ZIP.
 
 ## Version Check
 
-- Confirm the version or release name.
+- Confirm the version or release name. The current release candidate is `0.2.0`.
 - Update `CHANGELOG.md`.
 - Confirm `LICENSE` uses the correct copyright name.
 - Confirm `README.md` matches the current GUI.
+- Confirm `docs/SCREENSHOTS.md` screenshots match the current GUI.
+- Confirm screenshots use sample paths only and do not show private folders, client names, or personal data.
 
 ## Test Check
 
@@ -16,7 +18,8 @@ Use Windows PowerShell 5.1 with Pester 4.10.1.
 Run from the repository root:
 
 ```powershell
-Invoke-Pester -Script .\tests\DupliView.Tests.ps1
+Import-Module Pester -RequiredVersion 4.10.1 -Force
+Invoke-Pester -Script .\tests\DupliView.Tests.ps1 -EnableExit
 ```
 
 The release is not ready if any test fails.
@@ -55,7 +58,7 @@ Confirm DupliView still does not:
 - Overwrite scanned files.
 - Modify scanned files.
 - Upload files.
-- Make network calls.
+- Make internet calls or network connections outside user-selected file shares.
 - Send telemetry.
 - Require administrator rights.
 - Install anything.
@@ -65,7 +68,17 @@ Confirm DupliView still does not:
 
 ## ZIP Contents
 
-Include:
+Create the ZIP from the repository root:
+
+```powershell
+.\tools\New-ReleasePackage.ps1 -Version 0.2.0
+```
+
+The script writes `dist\DupliView-0.2.0.zip` and `dist\DupliView-0.2.0.zip.sha256`.
+
+The release ZIP is source-inclusive. Normal users start with `START HERE.txt`; maintainers can inspect the source, tests, and packaging script.
+
+The ZIP should include:
 
 - `DupliView.ps1`
 - `Run DupliView.cmd`
@@ -76,6 +89,7 @@ Include:
 - `CHANGELOG.md`
 - `SECURITY.md`
 - `CONTRIBUTING.md`
+- `tools/New-ReleasePackage.ps1`
 - `src/`
 - `tests/`
 - `docs/`
@@ -88,6 +102,7 @@ Do not include:
 - `Reports/*.csv`
 - `Reports/*.log`
 - `Reports/*.tmp`
+- `dist/`
 - Temporary test folders.
 - Private screenshots.
 - Local editor settings.

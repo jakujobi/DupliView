@@ -16,7 +16,7 @@ Pull requests will be rejected if they add or require:
 - Renaming scanned files.
 - Overwriting scanned files.
 - Telemetry.
-- Network behavior.
+- Network behavior outside user-selected file shares.
 - Upload behavior.
 - Administrator requirements.
 - Installers.
@@ -52,4 +52,4 @@ Do not include private file contents in reports.
 
 Maintainers should review every security-related change for preservation of the report-only boundary. Any change that expands DupliView beyond local CSV reporting requires rejection unless it is rewritten to preserve the safety guarantees above.
 
-Pull requests adding deletion, cleanup, telemetry, or network behavior will be rejected.
+Pull requests adding deletion, cleanup, telemetry, uploads, or network behavior outside user-selected file shares will be rejected.

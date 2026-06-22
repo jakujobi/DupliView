@@ -18,6 +18,7 @@ DupliView is report-only. It reads selected folders and writes CSV reports. It d
 - [Release Checklist](RELEASE_CHECKLIST.md): checks before publishing a ZIP.
 - [Screenshots](SCREENSHOTS.md): a short description of the current Windows interface.
 - [Contributing](../CONTRIBUTING.md): safety rules and development notes.
+- [Release Packaging Script](../tools/New-ReleasePackage.ps1): creates the release ZIP and SHA-256 checksum.
 
 ## Safety reminder
 

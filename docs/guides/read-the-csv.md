@@ -14,21 +14,37 @@ If the scan used a folder such as `C:\Users\Example\Documents\TestDuplicates`, t
 
 ## Columns To Know
 
-`DuplicateGroup` is the group number. Rows with the same value are exact matches.
+`DuplicateGroup`: group label for exact matches, such as `Group001`. Rows with the same value are exact matches.
 
-`FullPath` is the full path to each matching file.
+`GroupFileCount`: number of files in that duplicate group.
 
-`SizeMB` is the file size in megabytes.
+`RootScanned`: selected scan location that produced the row.
 
-`Hash` is the exact-match fingerprint DupliView calculated for the file. Files in the same duplicate group have the same hash.
+`DriveOrSource`: drive letter or shared source for the file.
 
-`LastModified` is the Windows last-modified date and time for that file.
+`FileName`: file name only.
+
+`FileExtension`: file extension, such as `.pdf`, `.docx`, or `.xlsx`.
+
+`FolderPath`: folder containing the file.
+
+`FullPath`: full path to each matching file.
+
+`SizeBytes`: file size in bytes.
+
+`SizeMiB`: file size in mebibytes.
+
+`Hash`: exact-match fingerprint DupliView calculated for the file. Files in the same duplicate group have the same hash.
+
+`LastModified`: Windows last-modified date and time for that file.
+
+`ExportedAt`: date and time DupliView wrote the report row.
 
 ## A Simple Review Method
 
 1. Sort by `DuplicateGroup`.
 2. Keep rows with the same `DuplicateGroup` together.
-3. Compare `FullPath`, `SizeMB`, and `LastModified`.
+3. Compare `FullPath`, `SizeMiB`, and `LastModified`.
 4. Use the report to discuss the results with the file owner or team.
 
 Do not change the report rows to make DupliView do something. The CSV is not an instruction file; it is only a record of what the scan found.
